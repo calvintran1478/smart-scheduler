@@ -1,23 +1,50 @@
-from jwt import encode
 import datetime
+from uuid import UUID
+from jose import JWTError, jwt
 from config.settings import ACCESS_TOKEN_MINUTE_LIFESPAN, REFRESH_TOKEN_HOUR_LIFESPAN, API_SECRET
+from litestar import Response
 
-def generate_access_token(user_email: str) -> str:
+def generate_access_token(user_id: UUID) -> str:
     claims = {
         "authorized": True,
-        "email": user_email,
+        "user_id": str(user_id),
         "exp": datetime.datetime.now() + datetime.timedelta(minutes=ACCESS_TOKEN_MINUTE_LIFESPAN)
     }
 
-    return encode(claims, API_SECRET)
+    return jwt.encode(claims, API_SECRET)
 
-def generate_refresh_token(user_email: str) -> str:
-    token_life_span = 15
-
+def generate_refresh_token(user_id: UUID, sequence_number: int) -> str:
     claims = {
         "authorized": True,
-        "email": user_email,
+        "sequence_number": sequence_number,
+        "user_id": str(user_id),
         "exp": datetime.datetime.now() + datetime.timedelta(hours=REFRESH_TOKEN_HOUR_LIFESPAN)
     }
 
-    return encode(claims, API_SECRET)
+    return jwt.encode(claims, API_SECRET)
+
+def parse_claims(token: str) -> dict | None:
+    try:
+        return jwt.decode(token, API_SECRET, algorithms=["HS256"])
+    except JWTError as e:
+        return None
+
+class TokenResponse(Response):
+    def __init__(self, user: User) -> None:
+        access_token = generate_access_token(user.id)
+        refresh_token = generate_refresh_token(user.id, user.refresh_token_number)
+
+        refresh_cookie = Cookie(
+            key="refresh-token",
+            value=refresh_token,
+            max_age=REFRESH_TOKEN_HOUR_LIFESPAN * 3600,
+            domain="localhost",
+            httponly=True,
+            samesite="strict"
+        )
+
+        super().__init__(
+            content={"access_token": access_token},
+            cookies=[refresh_cookie],
+            status_code=HTTP_200_OK
+        )
