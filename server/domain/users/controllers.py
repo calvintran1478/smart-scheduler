@@ -73,7 +73,7 @@ class UserController(Controller):
         # Check that the refresh token corresponds to a user and the sequence number is as expected
         user = await users_repo.get_one_or_none(statement=select(User).where(User.id == claims["user_id"]))
         if (user == None):
-            return Response(content={"error": "User with token not found"}, status_code=HTTP_404_NOT_FOUND)
+            return Response(content="", status_code=HTTP_401_UNAUTHORIZED)
         elif (user.refresh_token_number == None or claims["sequence_number"] != user.refresh_token_number):
             user.refresh_token_number = None
             await users_repo.update(user, auto_commit=True)
