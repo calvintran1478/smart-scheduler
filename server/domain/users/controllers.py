@@ -4,7 +4,6 @@ from typing_extensions import Annotated
 
 from litestar import Controller, Response, post, get
 from litestar.status_codes import HTTP_200_OK, HTTP_201_CREATED, HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT
-from litestar.datastructures import Cookie
 from litestar.params import Parameter
 from litestar.di import Provide
 
@@ -21,7 +20,7 @@ class UserController(Controller):
     path = "/users"
     dependencies = {"users_repo": Provide(provide_users_repo)}
 
-    @post()
+    @post(path="/", exclude_from_auth=True)
     async def register_user(self, data: RegisterInput, users_repo: UserRepository) -> dict[str, str] | None:
         # Check that the email provided is valid
         normalized_email = normalize_email(data.email)
@@ -47,7 +46,7 @@ class UserController(Controller):
 
         return Response(content="", status_code=HTTP_201_CREATED)
     
-    @post("/login")
+    @post(path="/login",  exclude_from_auth=True)
     async def login_user(self, data: LoginInput, users_repo: UserRepository) -> dict[str, str] | None:
         # Look up user in database
         normalized_email = normalize_email(data.email)
@@ -64,7 +63,7 @@ class UserController(Controller):
 
         return TokenResponse(user)
 
-    @get("/token")
+    @get(path="/token", exclude_from_auth=True)
     async def refresh_token(self, cookie: Annotated[str, Parameter(cookie="refresh-token")], users_repo: UserRepository) -> None:
         # Get claims if token is not expired
         claims = parse_claims(cookie)

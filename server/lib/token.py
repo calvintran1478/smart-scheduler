@@ -3,6 +3,9 @@ from uuid import UUID
 from jose import JWTError, jwt
 from config.settings import ACCESS_TOKEN_MINUTE_LIFESPAN, REFRESH_TOKEN_HOUR_LIFESPAN, API_SECRET
 from litestar import Response
+from litestar.status_codes import HTTP_200_OK
+from litestar.datastructures import Cookie
+from models.user import User
 
 def generate_access_token(user_id: UUID) -> str:
     claims = {
