@@ -1,8 +1,7 @@
-from litestar.contrib.sqlalchemy.plugins import SQLAlchemyAsyncConfig
-from litestar.contrib.sqlalchemy.plugins import SQLAlchemyPlugin
+from litestar.contrib.sqlalchemy.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+from litestar.contrib.sqlalchemy.base import UUIDBase
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import autocommit_before_send_handler
 from config.settings import DB_USER, DB_PASSWORD, DB_HOST, DB_NAME
-from litestar.contrib.sqlalchemy.base import UUIDBase
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string=f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}",

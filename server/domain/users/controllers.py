@@ -17,7 +17,6 @@ from lib.email import normalize_email
 from bcrypt import hashpw, gensalt, checkpw
 
 class UserController(Controller):
-    path = "/users"
     dependencies = {"users_repo": Provide(provide_users_repo)}
 
     @post(path="/", exclude_from_auth=True)

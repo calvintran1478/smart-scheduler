@@ -11,7 +11,7 @@ def generate_access_token(user_id: UUID) -> str:
     claims = {
         "authorized": True,
         "user_id": str(user_id),
-        "exp": datetime.datetime.now() + datetime.timedelta(minutes=ACCESS_TOKEN_MINUTE_LIFESPAN)
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_MINUTE_LIFESPAN)
     }
 
     return jwt.encode(claims, API_SECRET)
@@ -21,7 +21,7 @@ def generate_refresh_token(user_id: UUID, sequence_number: int) -> str:
         "authorized": True,
         "sequence_number": sequence_number,
         "user_id": str(user_id),
-        "exp": datetime.datetime.now() + datetime.timedelta(hours=REFRESH_TOKEN_HOUR_LIFESPAN)
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=REFRESH_TOKEN_HOUR_LIFESPAN)
     }
 
     return jwt.encode(claims, API_SECRET)
