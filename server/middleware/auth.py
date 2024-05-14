@@ -1,5 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.exc import NoResultFound
 
 from litestar import Request
 from litestar.datastructures import State
@@ -25,7 +26,10 @@ class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
         engine = create_async_engine(f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}")
         async with session_maker(bind=engine) as session:
             result = await session.execute(select(User).where(User.id == claims["user_id"]))
-            user = result.scalar_one()
+            try:
+                user = result.scalar_one()
+            except NoResultFound:
+                raise NotAuthorizedException
 
         return AuthenticationResult(user=user, auth=claims)
 
