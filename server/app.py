@@ -1,8 +1,10 @@
 from litestar import Litestar, Router
+from litestar.exceptions import ClientException
 from litestar.di import Provide
 from config.plugins import plugins
 from domain.users.controllers import UserController
 from middleware.auth import auth_middleware, user_dependency
+from lib.exception import client_exception_handler
 
 user_router = Router(
     path="/users",
@@ -15,5 +17,6 @@ router = Router(path="/api", route_handlers=[v1_router])
 app = Litestar(
     route_handlers=[router],
     middleware=[auth_middleware],
-    plugins=plugins
+    plugins=plugins,
+    exception_handlers={ClientException: client_exception_handler}
 )
