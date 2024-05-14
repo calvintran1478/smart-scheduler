@@ -3,9 +3,9 @@ from sqlalchemy import select
 from typing_extensions import Annotated
 
 from litestar import Controller, Response, post, get
-from litestar.status_codes import HTTP_200_OK, HTTP_401_UNAUTHORIZED, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT
+from litestar.status_codes import HTTP_409_CONFLICT
 from litestar.params import Parameter
-from litestar.exceptions import ClientException
+from litestar.exceptions import ClientException, NotAuthorizedException, NotFoundException
 from litestar.di import Provide
 
 from models.user import User
@@ -49,16 +49,16 @@ class UserController(Controller):
         return user
 
     @post(path="/login",  exclude_from_auth=True)
-    async def login_user(self, data: LoginInput, users_repo: UserRepository) -> dict[str, str] | None:
+    async def login_user(self, data: LoginInput, users_repo: UserRepository) -> TokenResponse:
         # Look up user in database
         normalized_email = normalize_email(data.email)
         user = await users_repo.get_one_or_none(statement=select(User).where(User.email == normalized_email))
         if (user == None):
-            return Response(content={"error": "User with email not found"}, status_code=HTTP_404_NOT_FOUND)
+            raise NotFoundException(detail="User with email not found")
 
         # Verify user password
         if not checkpw(data.password.encode('utf-8'), user.password.encode('utf-8')):
-            return Response(content={"error": "Incorrect password"}, status_code=HTTP_401_UNAUTHORIZED)
+            raise NotAuthorizedException(detail="Incorrect password")
 
         user.refresh_token_number = 1
         await users_repo.update(user, auto_commit=True)
@@ -66,20 +66,20 @@ class UserController(Controller):
         return TokenResponse(user)
 
     @get(path="/token", exclude_from_auth=True)
-    async def refresh_token(self, cookie: Annotated[str, Parameter(cookie="refresh-token")], users_repo: UserRepository) -> None:
+    async def refresh_token(self, cookie: Annotated[str, Parameter(cookie="refresh-token")], users_repo: UserRepository) -> TokenResponse:
         # Get claims if token is not expired
         claims = parse_claims(cookie)
-        if (claims == None):
-            return Response(content="", status_code=HTTP_401_UNAUTHORIZED)
 
-        # Check that the refresh token corresponds to a user and the sequence number is as expected
+        # Check that the refresh token corresponds to a user
         user = await users_repo.get_one_or_none(statement=select(User).where(User.id == claims["user_id"]))
         if (user == None):
-            return Response(content="", status_code=HTTP_401_UNAUTHORIZED)
-        elif (user.refresh_token_number == None or claims["sequence_number"] != user.refresh_token_number):
+            raise NotAuthorizedException
+
+        # Check the sequence number is as expected
+        if (user.refresh_token_number == None or claims["sequence_number"] != user.refresh_token_number):
             user.refresh_token_number = None
             await users_repo.update(user, auto_commit=True)
-            return Response(content="", status_code=HTTP_401_UNAUTHORIZED)
+            raise NotAuthorizedException
 
         user.refresh_token_number += 1
         await users_repo.update(user, auto_commit=True)

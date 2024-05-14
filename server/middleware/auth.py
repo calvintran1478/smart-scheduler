@@ -20,8 +20,6 @@ class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
             raise NotAuthorizedException
 
         claims = parse_claims(auth_header.split()[1])
-        if (claims == None):
-            raise NotAuthorizedException
 
         session_maker = async_sessionmaker()
         engine = create_async_engine(f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}")
