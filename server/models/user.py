@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from litestar.contrib.sqlalchemy.base import UUIDBase
-from typing import Optional
 
 from models.preferred_time_interval import PreferredTimeInterval
 
@@ -11,6 +10,6 @@ class User(UUIDBase):
     password: Mapped[str]
     first_name: Mapped[str]
     last_name: Mapped[str]
-    refresh_token_number: Mapped[Optional[int]]
 
+    devices: Mapped[list["Device"]] = relationship(back_populates="user")
     preference: Mapped["Preference"] = relationship(back_populates="user")

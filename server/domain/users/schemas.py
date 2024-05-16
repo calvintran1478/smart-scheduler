@@ -11,3 +11,4 @@ class RegisterInput:
 class LoginInput:
     email: str
     password: str
+    device_id: str
