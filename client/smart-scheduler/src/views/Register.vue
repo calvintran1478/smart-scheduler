@@ -1,8 +1,9 @@
 <template>
   <ion-page>
     <ion-content class="ion-padding">
+      <h1 class="schedulize">Schedulize</h1>
+      <h2 class="subtext">Start optimizing your day.</h2>
       <div class="register-form">
-        <h2>Register</h2>
         <form @submit.prevent="registerUser">
           <div class="form-group">
             <ion-label position="floating">First Name</ion-label>
@@ -22,9 +23,15 @@
           </div>
           <div class="form-group">
             <ion-label position="floating">Confirm Password</ion-label>
-            <ion-input v-model="confirmPassword" type="password" required></ion-input>
+            <ion-input
+              v-model="confirmPassword"
+              type="password"
+              required
+            ></ion-input>
           </div>
-          <ion-button expand="block" type="submit" class="custom_button">Register</ion-button>
+          <ion-button expand="block" type="submit" class="custom_button"
+            >Register</ion-button
+          >
         </form>
       </div>
     </ion-content>
@@ -32,39 +39,68 @@
 </template>
 
 <script>
-export default {
+import {
+  IonButton,
+  IonLabel,
+  IonInput,
+  IonItem,
+  IonContent,
+  IonPage,
+} from "@ionic/vue";
+import { defineComponent } from "vue";
+export default defineComponent({
+  components: { IonButton, IonLabel, IonInput, IonItem, IonContent, IonPage },
   data() {
     return {
-      firstName: '',
-      lastName: '',
-      email: '',
-      password: '',
-      confirmPassword: ''
+      firstName: "",
+      lastName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
     };
   },
   methods: {
-    registerUser() {
-      // Validate form fields before submitting the registration
+    async registerUser() {
       if (this.password !== this.confirmPassword) {
         alert("Passwords do not match");
         return;
       }
-      // Your registration logic goes here
-      console.log('Registering user with data:', {
-        firstName: this.firstName,
-        lastName: this.lastName,
-        email: this.email,
-        password: this.password
-      });
-    }
-  }
-};
+      try {
+        // endpoint is /?
+        const response = await fetch("http://localhost:8000/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            first_name: this.firstName,
+            last_name: this.lastName,
+            email: this.email,
+            password: this.password,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Register failed");
+        }
+        console.log("Register successful");
+        // Redirect to login page if successful
+        this.$router.push({ name: "Login" });
+      } catch (error) {
+        console.error("Error during register:", error);
+      }
+    },
+  },
+});
 </script>
 
 <style scoped>
 .register-form {
-  max-width: 400px;
+  padding-top: 40px;
+  max-width: 350px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center items horizontally */
 }
 
 .form-group {
@@ -79,13 +115,26 @@ ion-input {
   border-radius: 5px;
 }
 
-ion-button {
-  border-radius: 5px;
-  --background: #007bff;
-  color: #fff;
-}
-
 ion-button:hover {
   --background: #0056b3;
 }
+.schedulize {
+  padding-top: 30px;
+  font-size: 30px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.subtext {
+  font-size: 20px;
+  text-align: center;
+}
+
+.custom_button {
+  --background: #75f4c7;
+  width: 300px;
+  color: #000000;
+  font-weight: bold;
+}
+
 </style>

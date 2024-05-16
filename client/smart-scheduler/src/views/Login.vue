@@ -1,8 +1,8 @@
 <template>
   <ion-page>
     <ion-content class="ion-padding" fullscreen>
-      <p class="schedulize">Schedulize</p>
-      <p class="subtext">Start optimizing your day.</p>
+      <h1 class="schedulize">Schedulize</h1>
+      <h2 class="subtext">Start optimizing your day.</h2>
       <div class="ion-text-center">
         <img src="/logo.png" alt="Schedulize Logo" class="logo" />
       </div>
@@ -79,7 +79,6 @@ export default defineComponent({
         console.log("Login successful");
       } catch (error) {
         console.error("Error during login:", error);
-        // Handle login error, show error message to the user, etc.
       }
     },
     redirectToResetPassword() {
@@ -94,6 +93,7 @@ export default defineComponent({
   width: 250px; /* Adjust size as needed */
   height: auto; /* Maintain aspect ratio */
   margin: 10px auto;
+  padding-top: 30px;
 }
 
 .container {
