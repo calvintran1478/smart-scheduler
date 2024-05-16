@@ -46,6 +46,7 @@ import {
   IonPage,
 } from "@ionic/vue";
 import { defineComponent } from "vue";
+import { setCookie } from '../services/auth';
 export default defineComponent({
   components: { IonButton, IonLabel, IonInput, IonItem, IonContent, IonPage },
   data() {
@@ -75,7 +76,10 @@ export default defineComponent({
           throw new Error("Did not receive token");
         }
         // Store the token in localStorage (for now)??
-        localStorage.setItem("token", data.token);
+        // localStorage.setItem("token", data.token);
+        // set as cookie
+        setCookie('refresh-token', data.token, 1);
+
         console.log("Login successful");
       } catch (error) {
         console.error("Error during login:", error);
