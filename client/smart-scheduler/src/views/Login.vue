@@ -57,7 +57,7 @@ export default defineComponent({
   methods: {
     async login() {
       try {
-        const response = await fetch("http://localhost:8000/login", {
+        const response = await fetch("http://localhost:8000/api/v1/users/login", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -90,8 +90,8 @@ export default defineComponent({
 
 <style scoped>
 .logo {
-  width: 250px; /* Adjust size as needed */
-  height: auto; /* Maintain aspect ratio */
+  width: 250px;
+  height: auto;
   margin: 10px auto;
   padding-top: 30px;
 }

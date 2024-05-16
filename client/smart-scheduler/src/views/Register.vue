@@ -67,7 +67,7 @@ export default defineComponent({
       }
       try {
         // endpoint is /?
-        const response = await fetch("http://localhost:8000/", {
+        const response = await fetch("http://localhost:8000/api/v1/users", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -83,8 +83,8 @@ export default defineComponent({
           throw new Error("Register failed");
         }
         console.log("Register successful");
-        // Redirect to login page if successful
-        this.$router.push({ name: "Login" });
+        // Redirect to settings page if successful
+        this.$router.push({ name: "Settings" });
       } catch (error) {
         console.error("Error during register:", error);
       }
