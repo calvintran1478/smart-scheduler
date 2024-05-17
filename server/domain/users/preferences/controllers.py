@@ -1,4 +1,4 @@
-from litestar import Controller, Response, put
+from litestar import Controller, Response, put, get
 from litestar.status_codes import HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from litestar.di import Provide
 
@@ -8,6 +8,7 @@ from models.preferred_time_interval import PreferredTimeInterval
 from domain.users.preferences.repositories import PreferenceRepository, PreferredTimeIntervalRepository
 from domain.users.preferences.dependencies import provide_preferences_repo, provide_preferred_time_interval_repo
 from domain.users.preferences.schemas import SetPreferencesInput
+from domain.users.preferences.dtos import PreferenceDTO
 
 class PreferenceController(Controller):
     dependencies = {"preferences_repo": Provide(provide_preferences_repo), "preferred_time_intervals_repo": Provide(provide_preferred_time_interval_repo)}
@@ -68,3 +69,15 @@ class PreferenceController(Controller):
             return Response(content=preference_representation, status_code=HTTP_201_CREATED)
 
         return Response(content="", status_code=HTTP_204_NO_CONTENT)
+
+    @get(path="/", return_dto=PreferenceDTO)
+    async def get_preferences(
+        self,
+        user: User,
+        preferences_repo: PreferenceRepository
+    ) -> Preference:
+        # Get preferences
+        preferences = await preferences_repo.get_one_or_none(user_id = user.id)
+        if (preferences != None):
+            return preferences
+        return Preference()
