@@ -23,17 +23,18 @@ function getCookie(cname) {
 // function to get refresh token
 export async function refreshToken() {
     try {
-        const refreshToken = getCookie('refresh-token');
         const response = await fetch('http://localhost:8000/api/v1/users/token', {
             method: 'GET',
             credentials: 'include'  // includes the cookies
         });
 
         if (response.ok) {
-            const data = await response.json();
-            const newToken = data.token;
+            // no need to store?
+            //const data = await response.json();
+            //const newToken = data.access_token;
 
-            setCookie('refresh-token', newToken, 1);
+            //setCookie('refresh-token', newToken, 1);
+            console.log("Refresh token successful")
         } else {
             console.error('Failed to refresh token:', response.statusText);
         }

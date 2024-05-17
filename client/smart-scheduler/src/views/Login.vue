@@ -47,6 +47,7 @@ import {
 } from "@ionic/vue";
 import { defineComponent } from "vue";
 import { setCookie } from '../services/auth';
+import { getDeviceId } from '../services/device';
 export default defineComponent({
   components: { IonButton, IonLabel, IonInput, IonItem, IonContent, IonPage },
   data() {
@@ -58,6 +59,7 @@ export default defineComponent({
   methods: {
     async login() {
       try {
+        const deviceId = getDeviceId();
         const response = await fetch("http://localhost:8000/api/v1/users/login", {
           method: "POST",
           headers: {
@@ -66,6 +68,7 @@ export default defineComponent({
           body: JSON.stringify({
             email: this.email,
             password: this.password,
+            device_id: deviceId,
           }),
         });
         if (!response.ok) {
@@ -77,8 +80,8 @@ export default defineComponent({
         }
         // Store the token in localStorage (for now)??
         // localStorage.setItem("token", data.token);
-        // set as cookie
-        setCookie('refresh-token', data.token, 1);
+        // set as cookie, not needed?
+        // setCookie('refresh-token', data.access_token, 1);
 
         console.log("Login successful");
       } catch (error) {
