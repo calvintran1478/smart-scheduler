@@ -7,7 +7,7 @@ class Device(UUIDBase):
     __tablename__ = "devices"
 
     refresh_token_number: Mapped[Optional[int]]
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"))
     device_id: Mapped[str] = mapped_column(unique=True)
 
     user: Mapped["User"] = relationship(back_populates="devices")

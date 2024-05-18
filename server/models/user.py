@@ -11,5 +11,5 @@ class User(UUIDBase):
     first_name: Mapped[str]
     last_name: Mapped[str]
 
-    devices: Mapped[list["Device"]] = relationship(back_populates="user")
-    preference: Mapped["Preference"] = relationship(back_populates="user")
+    devices: Mapped[list["Device"]] = relationship(back_populates="user", passive_deletes=True)
+    preference: Mapped["Preference"] = relationship(back_populates="user", passive_deletes=True)

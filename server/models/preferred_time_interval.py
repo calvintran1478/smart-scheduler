@@ -8,6 +8,6 @@ class PreferredTimeInterval(UUIDBase):
 
     start_time: Mapped[time]
     end_time: Mapped[time]
-    preference_id: Mapped[int] = mapped_column(ForeignKey("preferences.id"))
+    preference_id: Mapped[int] = mapped_column(ForeignKey("preferences.id", ondelete="CASCADE", onupdate="CASCADE"))
 
     preference: Mapped["Preference"] = relationship(back_populates="best_focus_times")
