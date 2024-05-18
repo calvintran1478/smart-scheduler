@@ -2,13 +2,10 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.exc import NoResultFound
 
-from litestar import Request
-from litestar.datastructures import State
 from litestar.connection import ASGIConnection
 from litestar.exceptions import NotAuthorizedException
 from litestar.middleware import AbstractAuthenticationMiddleware, AuthenticationResult
 from litestar.middleware.base import DefineMiddleware
-from litestar.security.jwt import Token
 
 from models.user import User
 from models.device import Device
@@ -44,8 +41,5 @@ class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
                 raise NotAuthorizedException
 
         return AuthenticationResult(user=user, auth=access_claims)
-
-async def user_dependency(request: Request[User, Token, State]) -> User:
-    return request.user
 
 auth_middleware = DefineMiddleware(JWTAuthenticationMiddleware)

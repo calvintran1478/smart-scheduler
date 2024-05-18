@@ -6,3 +6,5 @@ def client_exception_handler(_: Request, exception: Exception) -> Response:
     detail = getattr(exception, "detail")
 
     return Response(content={"error": detail}, status_code=status_code)
+
+exception_handlers = {ClientException: client_exception_handler}

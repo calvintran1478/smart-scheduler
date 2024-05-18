@@ -12,7 +12,7 @@ class PreferenceRepository(SQLAlchemyAsyncRepository[Preference]):
 
 
 class PreferredTimeIntervalRepository(SQLAlchemyAsyncRepository[PreferredTimeInterval]):
-    """Best focus time repository"""
+    """Preferred Time Interval repository"""
 
     model_type = PreferredTimeInterval
 

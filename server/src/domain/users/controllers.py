@@ -99,11 +99,11 @@ class UserController(Controller):
         return response
 
     @post(path="logout")
-    async def logout_user(self, cookie: Annotated[str, Parameter(cookie="refresh-token")], user: User, users_repo: UserRepository, devices_repo: DeviceRepository) -> None:
+    async def logout_user(self, cookie: Annotated[str, Parameter(cookie="refresh-token")], devices_repo: DeviceRepository) -> None:
         # Logout device
         refresh_claims = parse_claims(cookie)
         device = await devices_repo.get_one_or_none(device_id=refresh_claims["device_id"])
         device.refresh_token_number = None
-        devices_repo.update(device, auto_commit=True)
+        await devices_repo.update(device, auto_commit=True)
 
         return Response(content="", status_code=HTTP_204_NO_CONTENT)

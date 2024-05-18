@@ -4,7 +4,7 @@ First check that Python, pip, and Postgres are installed on your system.
 
 ## Building Dependencies
 
-Create a python virtual environment in the project directory.
+Create a python virtual environment in the server directory.
 ```bash
 python -m venv litestar-env
 ```
@@ -14,7 +14,7 @@ source litestar-env/bin/activate
 ```
 Install the package requirements using pip.
 ```bash
-pip install -r ./server/requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Database Setup
@@ -28,11 +28,11 @@ Log into psql with the default user 'postgres'.
 sudo -u postgres psql
 ```
 Create a database for the server and give it a name.
-```bash
+```sql
 postgres=# CREATE DATABASE <dbname>;
 ```
 Create a user which can access and modify contents of the database. For this use the following commands with your own choice of username and password.
-```bash
+```sql
 postgres=# CREATE USER <username> WITH ENCRYPTED PASSWORD '<password>';
 postgres=# GRANT ALL PRIVILEGES ON DATABASE <dbname> TO <username>;
 postgres=# \c <dbname>;
@@ -56,7 +56,7 @@ For host you can simply put 'localhost'. The api secret should be a string only 
 
 ## Starting the Server
 
-Ensure your virtual environment is active. You can start the server by entering the following command in the server directory.
+Ensure your virtual environment is active. You can start the server by entering the following command in the server/src directory.
 ```bash
 litestar run
 ```
