@@ -41,7 +41,7 @@ postgres=# GRANT ALL ON SCHEMA public TO <username>;
 
 ## Setting up Environment Variables
 
-Move to the server/config directory and create a .env file with the following contents.
+Move to the server/src/config directory and create a .env file with the following contents.
 ```
 DB_HOST=<host>
 DB_USER=<username>
