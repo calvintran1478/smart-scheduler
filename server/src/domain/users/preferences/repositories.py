@@ -3,6 +3,7 @@ from litestar.exceptions import HTTPException
 from models.preference import Preference
 from models.preferred_time_interval import PreferredTimeInterval
 from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
 class PreferenceRepository(SQLAlchemyAsyncRepository[Preference]):
