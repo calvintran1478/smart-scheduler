@@ -21,3 +21,4 @@ class Tag(UUIDBase):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"))
 
     user: Mapped["User"] = relationship(back_populates="tags")
+    tasks: Mapped[list["Task"]] = relationship(back_populates="tag")
