@@ -47,7 +47,7 @@ class TagController(Controller):
         # Update tag values
         if (data.name != None):
             tag.name = data.name
-        
+
         if (data.colour != None):
             tag.colour = data.colour
 
