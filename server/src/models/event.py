@@ -26,4 +26,6 @@ class Event(UUIDBase):
     location: Mapped[Optional[str]]
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"))
 
+    updated_event_instances: Mapped[list["UpdatedEventInstance"]] = relationship(back_populates="event", passive_deletes=True)
+    exception_dates: Mapped[list["ExceptionDate"]] = relationship(back_populates="event", passive_deletes=True)
     user: Mapped["User"] = relationship(back_populates="events", lazy="selectin")
