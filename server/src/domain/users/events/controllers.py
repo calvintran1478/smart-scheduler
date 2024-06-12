@@ -1,4 +1,4 @@
-from litestar import Controller, Response, post, patch, delete
+from litestar import Controller, Response, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT
 from litestar.dto import DTOData
 from litestar.exceptions import ClientException, NotFoundException
@@ -10,8 +10,9 @@ from models.updated_event_instance import UpdatedEventInstance
 from models.exception_date import ExceptionDate
 from domain.users.events.repositories import EventRepository, ExceptionDateRepository, UpdatedEventInstanceRepository
 from domain.users.events.dependencies import provide_events_repo, provide_exception_dates_repo, provide_updated_event_instances_repo, provide_event
-from domain.users.events.dtos import UpdateEventDTO, EventDTO
 from domain.users.events.schemas import CreateEventInput, UpdateEventInput
+from domain.users.events.dtos import UpdateEventDTO, EventDTO
+from domain.users.events.hooks import after_event_get_request
 from domain.users.events.validators import validate_new_times, validate_event_query_parameters
 from lib.time import convert_to_utc
 from lib.event import get_updated_event_instance_from_event
@@ -42,6 +43,15 @@ class EventController(Controller):
         await events_repo.add(event, auto_commit=True)
 
         return event
+    
+    @get(path="/", return_dto=EventDTO, after_request=after_event_get_request)
+    async def get_events(self, user: User, events_repo: EventRepository, start: str, end: str, timezone: str) -> list[Event]:
+        # Validate query paramters
+        start_time, end_time, timezone_format = validate_event_query_parameters(start, end, timezone)
+
+        # Search for events in the given range
+        events = await events_repo.get_events_in_range(user.id, start_time, end_time, timezone_format)
+        return events
 
     @patch(path="/{event_id:str}", dto=UpdateEventDTO)
     async def update_event(
@@ -79,10 +89,9 @@ class EventController(Controller):
         # Update a particular instance of the event
         elif (start != None and timezone != None):
             # Convert start and timezone parameters
-            start, timezone = validate_event_query_parameters(start, timezone)
+            start_time = validate_event_query_parameters(start, None, timezone)[0]
 
             # Search for event instance
-            start_time = convert_to_utc(timezone, start)
             instance_exists, instance_type = await events_repo.check_instance(event, start_time, exception_dates_repo, updated_event_instances_repo)
             if (not instance_exists):
                 raise NotFoundException(detail="Event not found")
@@ -136,10 +145,9 @@ class EventController(Controller):
         # Delete a particular instance of the event
         elif (start != None and timezone != None):
             # Convert start and timezone parameters
-            start, timezone = validate_event_query_parameters(start, timezone)
+            start_time = validate_event_query_parameters(start, None, timezone)[0]
 
             # Search for event instance
-            start_time = convert_to_utc(timezone, start)
             instance_exists, instance_type = await events_repo.check_instance(event, start_time, exception_dates_repo, updated_event_instances_repo)
             if (not instance_exists):
                 raise NotFoundException(detail="Event not found")

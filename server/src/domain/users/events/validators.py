@@ -3,6 +3,7 @@ from pydantic.functional_validators import AfterValidator
 from pytz.exceptions import UnknownTimeZoneError
 from typing_extensions import Annotated
 from datetime import datetime
+from typing import Optional
 import pytz
 
 from models.event import Event, RepeatRuleEnum
@@ -35,11 +36,23 @@ def validate_new_times(update_data, event: Event) -> tuple[datetime, datetime]:
 
     return new_start_time, new_end_time
 
-def validate_event_query_parameters(start: str, timezone: str) -> tuple[datetime, pytz.timezone]:
-    try:
-        return datetime.strptime(start, "%Y-%m-%d-%H-%M"), check_timezone(timezone.replace("-", "/"))
-    except ValueError:
-        raise ClientException(detail="Invalid date")
+def validate_event_query_parameters(start: Optional[str], end: Optional[str], timezone: str) -> tuple[datetime, datetime, pytz.timezone]:
+    tzinfo = check_timezone(timezone.replace("-", "/"))
+    start_time, end_time = None, None
+
+    if (start != None):
+        try:
+            start_time = convert_to_utc(tzinfo, datetime.strptime(start, "%Y-%m-%d-%H-%M"))
+        except ValueError:
+            raise ClientException(detail="Invalid start date")
+
+    if (end != None):
+        try:
+            end_time = convert_to_utc(tzinfo, datetime.strptime(end, "%Y-%m-%d-%H-%M"))
+        except ValueError:
+            raise ClientException(detail="Invalid end date")
+
+    return start_time, end_time, tzinfo
 
 RepeatRule = Annotated[str, AfterValidator(check_repeat_rule)]
 TimeZone = Annotated[str, AfterValidator(check_timezone)]
