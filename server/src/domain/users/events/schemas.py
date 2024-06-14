@@ -11,9 +11,10 @@ class CreateEventInput(BaseModel):
     start_time: NaiveDatetime
     end_time: NaiveDatetime
     timezone: TimeZone
+    repeat_rule: Optional[RepeatRule] = "NEVER"
+    until: Optional["datetime.date"] = None
     description: Optional[str] = None
     location: Optional[str] = None
-    repeat_rule: Optional[RepeatRule] = "NEVER"
 
     @model_validator(mode="after")
     def validate_event(self) -> Self:
@@ -27,6 +28,7 @@ class UpdateEventInput(BaseModel):
     start_time: Optional["datetime.datetime"] = None
     end_time: Optional["datetime.datetime"] = None
     timezone: Optional[TimeZone] = None
+    repeat_rule: Optional[RepeatRule] = None
+    until: Optional["datetime.date"] = None
     description: Optional[str] = None
     location: Optional[str] = None
-    repeat_rule: Optional[RepeatRule] = None

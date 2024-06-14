@@ -2,7 +2,7 @@ from litestar.exceptions import ClientException
 from pydantic.functional_validators import AfterValidator
 from pytz.exceptions import UnknownTimeZoneError
 from typing_extensions import Annotated
-from datetime import datetime
+from datetime import datetime, time
 from typing import Optional
 import pytz
 
@@ -29,12 +29,15 @@ def validate_new_times(update_data, event: Event) -> tuple[datetime, datetime]:
 
     new_end_time = convert_to_utc(update_data.timezone, update_data.end_time) \
         if (update_data.end_time != None) else event.end_time
+    
+    new_until = convert_to_utc(update_data.timezone, datetime.combine(update_data.until, time(23, 59, 59))) \
+        if (update_data.until != None) else event.until
 
     # Check for valid times
     if (new_start_time > new_end_time):
         raise ClientException(detail="Start time must come before end time")
 
-    return new_start_time, new_end_time
+    return new_start_time, new_end_time, new_until
 
 def validate_event_query_parameters(start: Optional[str], end: Optional[str], timezone: str) -> tuple[datetime, datetime, pytz.timezone]:
     tzinfo = check_timezone(timezone.replace("-", "/"))

@@ -1,12 +1,13 @@
 from models.event import Event
 from models.updated_event_instance import UpdatedEventInstance
+from datetime import datetime
 from pytz import timezone
 
-def get_updated_event_instance_from_event(event: Event) -> UpdatedEventInstance:
+def get_updated_event_instance_from_event(event: Event, start_time: datetime) -> UpdatedEventInstance:
     return UpdatedEventInstance(
         summary=event.summary,
-        start_time=event.start_time,
-        end_time=event.end_time,
+        start_time=start_time,
+        end_time=start_time + (event.end_time - event.start_time),
         description=event.description,
         location=event.location,
         recurrence_id=event.start_time,

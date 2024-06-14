@@ -3,7 +3,7 @@ from sqlalchemy import select, delete, and_
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from uuid import UUID
-from math import ceil
+from math import ceil, floor
 from pytz import timezone
 
 from models.event import Event
@@ -28,6 +28,14 @@ class UpdatedEventInstanceRepository(SQLAlchemyAsyncRepository[UpdatedEventInsta
             await self.session.rollback()
         else:
             await self.session.commit()
+    
+    async def delete_after_date(self, event_id: UUID, date: datetime) -> None:
+        try:
+            await self.session.execute(statement=delete(UpdatedEventInstance).where(and_(UpdatedEventInstance.event_id == event_id, UpdatedEventInstance.start_time > date)))
+        except IntegrityError:
+            await self.session.rollback()
+        else:
+            await self.session.commit()
 
 class EventRepository(SQLAlchemyAsyncRepository[Event]):
     """Event repository"""
@@ -42,6 +50,14 @@ class EventRepository(SQLAlchemyAsyncRepository[Event]):
         updated_event_instances_repo: UpdatedEventInstanceRepository
     ) -> tuple[bool, str]:
         """Assumes event is recurring"""
+        # Check instance is a present or future instance of the event
+        if (start_time < event.start_time):
+            return False, ""
+
+        # Check if instance is past the until value
+        if (event.until != None and start_time > event.until):
+            return False, ""
+
         # Check if instance was deleted
         deleted = await exception_dates_repo.exists(start_time=start_time, event_id=event.id)
         if deleted:
@@ -79,7 +95,7 @@ class EventRepository(SQLAlchemyAsyncRepository[Event]):
             event.end_time = event.end_time.astimezone(timezone_format)
 
         # Get recurring daily, weekly, and yearly events
-        recurring_events = await self.list(and_(Event.repeat_rule != "NEVER", Event.repeat_rule != "MONTHLY"))
+        recurring_events = await self.list(Event.repeat_rule != "NEVER", Event.repeat_rule != "MONTHLY")
         z1 = start_time.timestamp() # range_start
         z2 = end_time.timestamp() # range_end
         for event in recurring_events:
@@ -96,14 +112,21 @@ class EventRepository(SQLAlchemyAsyncRepository[Event]):
                 case "YEARLY":
                     tau = 31536000
 
+            # Get instance count
+            instance_count = floor((event.until.timestamp() - event.start_time.timestamp()) / tau) + 1 if (event.until != None) else -1
+
             # Solve for values of m
             s1 = (z1 - t2) / tau
             s2 = (z2 - t1) / tau
             m_lower_bound = s1 + 1 if s1.is_integer() else ceil(s1)
             m_upper_bound = s2 if s2.is_integer() else ceil(s2)
 
+            # Bound m to present and future instances limited by the event's until value (if present)
+            m_lower_bound = max(m_lower_bound, 0)
+            if (instance_count != -1 and m_upper_bound > instance_count):
+                m_upper_bound = instance_count
+
             m_lst = list(range(int(m_lower_bound), int(m_upper_bound)))
-            m_lst = [m for m in m_lst if m >= 0]
 
             # Produce events
             event_lst += [Event(
@@ -122,19 +145,23 @@ class EventRepository(SQLAlchemyAsyncRepository[Event]):
         for event in recurring_events:
             if (event.repeat_rule == "MONTHLY"):
                 # Event properties
-                event_start = event.start_time.timestamp()
-                event_end = event.end_time.timestamp()
-                event_duration = event_end - event_start
+                event_duration = event.end_time - event.start_time
 
-                curr = (event_start, event_end)
-                while (curr[0] < z2):
+                # Initialize instance paramters and determine search bound
+                curr_start_time = event.start_time
+                curr_end_time = event.end_time
+                time_bound = end_time
+                if (event.until != None):
+                    time_bound = min(end_time, event.until)
+
+                while (curr_start_time < time_bound):
                     # Check if the event instance and time range intersect
-                    if (curr[1] > z1 and curr[0] < z2):
+                    if (curr_end_time > start_time and curr_start_time < end_time):
                         event_lst.append(Event(
                             id=event.id,
                             summary=event.summary,
-                            start_time=datetime.fromtimestamp(curr[0], timezone_format),
-                            end_time=datetime.fromtimestamp(curr[1], timezone_format),
+                            start_time=curr_start_time.astimezone(timezone_format),
+                            end_time=curr_end_time.astimezone(timezone_format),
                             repeat_rule=event.repeat_rule,
                             until=event.until,
                             description=event.description,
@@ -142,26 +169,19 @@ class EventRepository(SQLAlchemyAsyncRepository[Event]):
                         ))
 
                     # Increment curr to next event instance
-                    curr_start_time = datetime.fromtimestamp(curr[0])
-                    found_next = False
-                    next_month = curr_start_time.month + 1
-                    next_year = curr_start_time.year
-                    if (next_month == 13):
-                        next_month = 1
-                        next_year += 1
-
+                    found_next = False                  
+                    next_month = (curr_start_time.month + 1) % 12
+                    next_year = curr_start_time.year if (next_month != 1) else (curr_start_time.year + 1)
                     while (not found_next):
                         try:
                             curr_start_time = curr_start_time.replace(year=next_year, month=next_month)
                             found_next = True
                         except ValueError:
-                            next_month += 1
-                            if (next_month == 13):
-                                next_month = 1
+                            next_month = (next_month + 1) % 12
+                            if (next_month == 1):
                                 next_year += 1
 
-                    curr_start = curr_start_time.timestamp()
-                    curr = (curr_start, curr_start + event_duration)
+                    curr_end_time = curr_start_time + event_duration
 
         # Search for updated instances in the given range
         updated_instances_result = await self.session.execute(select(UpdatedEventInstance).join(UpdatedEventInstance.event).join(Event.user).where(and_(Event.user_id == user_id, and_(UpdatedEventInstance.start_time < end_time, UpdatedEventInstance.end_time > start_time))))

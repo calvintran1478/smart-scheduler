@@ -18,6 +18,7 @@ from lib.time import convert_to_utc
 from lib.event import get_updated_event_instance_from_event
 
 from typing import Optional
+from datetime import datetime, time
 
 class EventController(Controller):
     dependencies = {
@@ -35,9 +36,10 @@ class EventController(Controller):
             summary=data.summary,
             start_time=convert_to_utc(data.timezone, data.start_time),
             end_time=convert_to_utc(data.timezone, data.end_time),
+            repeat_rule=data.repeat_rule,
+            until=convert_to_utc(data.timezone, datetime.combine(data.until, time(23, 59, 59))),
             description=data.description,
             location=data.location,
-            repeat_rule=data.repeat_rule
         )
 
         await events_repo.add(event, auto_commit=True)
@@ -71,19 +73,25 @@ class EventController(Controller):
         if (event.repeat_rule == "NEVER" or (start == timezone == None)):
             # No time change
             if (update_data.timezone == None):
-                if (update_data.start_time != None or update_data.end_time != None):
+                if (update_data.start_time != None or update_data.end_time != None or update_data.until != None):
                     raise ClientException(detail="Missing required timezone info for time change")
                 data.update_instance(event)
 
             # Time change
             else:
-                new_start_time, new_end_time = validate_new_times(update_data, event)
+                old_until = event.until
+                new_start_time, new_end_time, new_until = validate_new_times(update_data, event)
                 data.update_instance(
                     event,
                     start_time=new_start_time,
-                    end_time=new_end_time
+                    end_time=new_end_time,
+                    until=new_until
                 )
-            
+
+                # Remove updated instances after the new until value (if changed to be earlier)
+                if (old_until == None and new_until != None or old_until != None and new_until < old_until):
+                    await updated_event_instances_repo.delete_after_date(event.id, new_until)
+
             return Response(content="", status_code=HTTP_204_NO_CONTENT)
 
         # Update a particular instance of the event
@@ -99,7 +107,7 @@ class EventController(Controller):
             # Add new updated instance or search for one to modify
             updated_instance = None
             if (instance_type == "event_instance"):
-                updated_instance = get_updated_event_instance_from_event(event)
+                updated_instance = get_updated_event_instance_from_event(event, start_time)
             elif (instance_type == "updated_instance"):
                 updated_instance = await updated_event_instances_repo.get_one_or_none(recurrence_id=start_time, event_id=event.id)
 
@@ -111,13 +119,13 @@ class EventController(Controller):
 
             # Time change
             else:
-                new_start_time, new_end_time = validate_new_times(update_data, event)
+                new_start_time, new_end_time, _ = validate_new_times(update_data, event)
                 data.update_instance(
                     updated_instance,
                     start_time=new_start_time,
                     end_time=new_end_time
                 )
-            
+
             # Save instance to database if one was created
             if (instance_type == "event_instance"):
                 await updated_event_instances_repo.add(updated_instance, auto_commit=True)
