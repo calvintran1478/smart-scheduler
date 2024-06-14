@@ -15,3 +15,4 @@ class User(UUIDBase):
     tags: Mapped[list["Tag"]] = relationship(back_populates="user", passive_deletes=True)
     tasks: Mapped[list["Task"]] = relationship(back_populates="user", passive_deletes=True)
     events: Mapped[list["Event"]] = relationship(back_populates="user", passive_deletes=True)
+    habits: Mapped[list["Habit"]] = relationship(back_populates="user", passive_deletes=True)
