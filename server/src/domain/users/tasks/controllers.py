@@ -1,4 +1,4 @@
-from litestar import Controller, Response, post, get, patch, delete
+from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT
 from litestar.exceptions import NotFoundException
 from litestar.dto import DTOData
@@ -48,7 +48,7 @@ class TaskController(Controller):
     async def get_task(self, task: Task) -> Task:
         return task
 
-    @patch(path="/{task_id:str}", dto=UpdateTaskDTO)
+    @patch(path="/{task_id:str}", dto=UpdateTaskDTO, status_code=HTTP_204_NO_CONTENT)
     async def update_task(self, data: DTOData[UpdateTaskInput], user: User, task: Task, tags_repo: TagRepository) -> None:
         # Perform normal update if tag was not changed
         tag_name = data.create_instance().tag
@@ -61,8 +61,6 @@ class TaskController(Controller):
             if (tag == None):
                 raise NotFoundException(detail="Tag not found")
             data.update_instance(task, tag=tag)
-
-        return Response(content="", status_code=HTTP_204_NO_CONTENT)
 
     @delete(path="/{task_id:str}")
     async def remove_task(self, task: Task, tasks_repo: TaskRepository) -> None:

@@ -1,4 +1,4 @@
-from litestar import Controller, Response, post, get, patch, delete
+from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT, HTTP_409_CONFLICT
 from litestar.exceptions import ClientException
 from litestar.di import Provide
@@ -37,7 +37,7 @@ class HabitController(Controller):
     async def get_habits(self, user: User, habits_repo: HabitRepository) -> list[Habit]:
         return await habits_repo.list(user_id = user.id)
 
-    @patch(path="/{habit_name:str}")
+    @patch(path="/{habit_name:str}", status_code=HTTP_204_NO_CONTENT)
     async def update_habit(self, data: UpdateHabitInput, user: User, habit: Habit, habits_repo: HabitRepository) -> None:
         # Check if any habits have the same name as the updated value
         if (data.name != None and data.name != habit.name):
@@ -51,8 +51,6 @@ class HabitController(Controller):
                 setattr(habit, attribute_name, attribute_value)
 
         await habits_repo.update(habit, auto_commit=True)
-
-        return Response(content="", status_code=HTTP_204_NO_CONTENT)
 
     @delete(path="/{habit_name:str}")
     async def remove_habit(self, habit: Habit, habits_repo: HabitRepository) -> None:

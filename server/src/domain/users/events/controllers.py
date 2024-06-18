@@ -1,4 +1,4 @@
-from litestar import Controller, Response, post, get, patch, delete
+from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT
 from litestar.dto import DTOData
 from litestar.exceptions import ClientException, NotFoundException
@@ -55,7 +55,7 @@ class EventController(Controller):
         events = await events_repo.get_events_in_range(user.id, start_time, end_time, timezone_format)
         return events
 
-    @patch(path="/{event_id:str}", dto=UpdateEventDTO)
+    @patch(path="/{event_id:str}", dto=UpdateEventDTO, status_code=HTTP_204_NO_CONTENT)
     async def update_event(
         self,
         data: DTOData[UpdateEventInput],
@@ -92,8 +92,6 @@ class EventController(Controller):
                 if (old_until == None and new_until != None or old_until != None and new_until < old_until):
                     await updated_event_instances_repo.delete_after_date(event.id, new_until)
 
-            return Response(content="", status_code=HTTP_204_NO_CONTENT)
-
         # Update a particular instance of the event
         elif (start != None and timezone != None):
             # Convert start and timezone parameters
@@ -129,8 +127,6 @@ class EventController(Controller):
             # Save instance to database if one was created
             if (instance_type == "event_instance"):
                 await updated_event_instances_repo.add(updated_instance, auto_commit=True)
-
-            return Response(content="", status_code=HTTP_204_NO_CONTENT)
 
         # Handle missing query parameters
         else:

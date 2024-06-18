@@ -7,7 +7,7 @@ def check_habit_name(habit_name: str) -> str:
     if (habit_name == ""):
         raise ClientException("Habit name cannot be empty")
 
-    return habit_name.replace(" ", "-")
+    return habit_name
 
 def check_habit_repeat_interval(repeat_interval: str) -> str:
     normalized_repeat_interval = repeat_interval.upper()

@@ -1,4 +1,4 @@
-from litestar import Controller, Response, post, get, patch, delete
+from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT, HTTP_409_CONFLICT
 from litestar.exceptions import ClientException, NotFoundException
 from litestar.di import Provide
@@ -6,13 +6,13 @@ from litestar.di import Provide
 from models.user import User
 from models.tag import Tag
 from domain.users.tags.repositories import TagRepository
-from domain.users.tags.dependencies import provide_tags_repo
+from domain.users.tags.dependencies import provide_tags_repo, provide_tag
 from domain.users.tags.schemas import CreateTagInput, UpdateTagInput
 from domain.users.tags.dtos import TagDTO
 from domain.users.tags.hooks import after_tag_get_request
 
 class TagController(Controller):
-    dependencies = {"tags_repo": Provide(provide_tags_repo)}
+    dependencies = {"tags_repo": Provide(provide_tags_repo), "tag": Provide(provide_tag)}
 
     @post(path="/", return_dto=TagDTO)
     async def create_tag(self, data: CreateTagInput, user: User, tags_repo: TagRepository) -> Tag:
@@ -31,13 +31,8 @@ class TagController(Controller):
     async def get_tags(self, user: User, tags_repo: TagRepository) -> list[Tag]:
         return await tags_repo.list(user_id = user.id)
 
-    @patch(path="/{tag_name:str}")
-    async def update_tag(self, data: UpdateTagInput, user: User, tag_name: str, tags_repo: TagRepository) -> None:
-        # Check if tag exists
-        tag = await tags_repo.get_one_or_none(user_id=user.id, name=tag_name)
-        if (tag == None):
-            raise NotFoundException(detail="Tag not found")
-
+    @patch(path="/{tag_name:str}", status_code=HTTP_204_NO_CONTENT)
+    async def update_tag(self, data: UpdateTagInput, user: User, tag: Tag, tags_repo: TagRepository) -> None:
         # Check if any other tags have the same name as the updated value
         if (data.name != None and data.name != tag.name):
             name_exists = await tags_repo.exists(user_id=user.id, name=data.name)
@@ -53,8 +48,6 @@ class TagController(Controller):
 
         await tags_repo.update(tag, auto_commit=True)
 
-        return Response(content="", status_code=HTTP_204_NO_CONTENT)
-
     @delete(path="/{tag_name:str}")
-    async def remove_tag(self, user: User, tag_name: str, tags_repo: TagRepository) -> None:
-        await tags_repo.delete_by_user_id_and_tag_name(user.id, tag_name)
+    async def remove_tag(self, tag: Tag, tags_repo: TagRepository) -> None:
+        await tags_repo.delete(tag.id)

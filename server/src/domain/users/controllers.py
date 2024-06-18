@@ -1,6 +1,6 @@
 from typing_extensions import Annotated
 
-from litestar import Controller, Response, post, get, patch
+from litestar import Controller, post, get, patch
 from litestar.status_codes import HTTP_204_NO_CONTENT, HTTP_409_CONFLICT
 from litestar.params import Parameter
 from litestar.exceptions import ClientException, NotAuthorizedException, NotFoundException
@@ -83,21 +83,19 @@ class UserController(Controller):
 
         return response
 
-    @patch(path="password")
+    @patch(path="password", status_code=HTTP_204_NO_CONTENT)
     async def change_password(self, data: ChangePasswordInput, user: User, users_repo: UserRepository) -> None:
         # Update user password
         hashed_password = hashpw(data.password.encode('utf-8'), gensalt())
         user.password = hashed_password.decode('utf-8')
+
         await users_repo.update(user, auto_commit=True)
 
-        return Response(content="", status_code=HTTP_204_NO_CONTENT)
-
-    @post(path="logout")
+    @post(path="logout", status_code=HTTP_204_NO_CONTENT)
     async def logout_user(self, cookie: Annotated[str, Parameter(cookie="refresh-token")], devices_repo: DeviceRepository) -> None:
         # Logout device
         refresh_claims = parse_claims(cookie)
         device = await devices_repo.get_one_or_none(device_id=refresh_claims["device_id"])
         device.refresh_token_number = None
-        await devices_repo.update(device, auto_commit=True)
 
-        return Response(content="", status_code=HTTP_204_NO_CONTENT)
+        await devices_repo.update(device, auto_commit=True)

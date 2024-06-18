@@ -7,7 +7,7 @@ def check_tag_name(tag_name: str) -> str:
     if (tag_name == ""):
         raise ClientException("Tag name cannot be empty")
 
-    return tag_name.replace(" ", "-")
+    return tag_name
 
 def check_tag_colour(tag_colour: str) -> str:
     normalized_tag_colour = tag_colour.lower()
