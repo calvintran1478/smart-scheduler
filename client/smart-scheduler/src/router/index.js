@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from '@ionic/vue-router';
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Settings from '../views/Settings.vue'
+import Home from '../views/Home.vue'
 
 const routes = [
   {
@@ -22,6 +23,11 @@ const routes = [
     path: '/settings',
     name: 'Settings',
     component: Settings
+  },
+  {
+    path: '/home',
+    name: 'Home',
+    component: Home
   }
 ]
 
