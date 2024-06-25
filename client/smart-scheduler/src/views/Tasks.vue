@@ -1,11 +1,7 @@
 <template>
     <ion-page>
-      <ion-header>
-        <ion-toolbar>
-          <ion-title>Tasks</ion-title>
-        </ion-toolbar>
-      </ion-header>
       <ion-content class="ion-padding">
+        <h1 class="title">Tasks to get done</h1>
         <ion-list>
           <ion-item v-for="task in tasks" :key="task.task_id">
             <ion-label>
@@ -99,5 +95,12 @@
   
   <style scoped>
   /* styling later */
+    .title {
+        padding-top: 30px;
+        font-size: 28px;
+        font-weight: bold;
+        text-align: left;
+        padding-left: 25px;
+    }
   </style>
   

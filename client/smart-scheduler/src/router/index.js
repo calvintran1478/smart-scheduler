@@ -4,6 +4,7 @@ import Register from '../views/Register.vue'
 import Settings from '../views/Settings.vue'
 import Home from '../views/Home.vue'
 import Tasks from '../views/Tasks.vue'
+import Habits from '../views/Habits.vue'
 
 const routes = [
   {
@@ -34,6 +35,11 @@ const routes = [
     path: '/tasks',
     name: 'Tasks',
     component: Tasks
+  },
+  {
+    path: '/habits',
+    name: 'Habits',
+    component: Habits
   }
 ]
 
