@@ -20,9 +20,9 @@
           </ion-row>
           <ion-row>
             <ion-col size="6">
-              <ion-button fill="clear" expand="block" router-link="/todo" class="home-button">
+              <ion-button fill="clear" expand="block" router-link="/tasks" class="home-button">
                 <ion-icon :icon="checkmarkDoneOutline" class="home-icon"></ion-icon>
-                <ion-label class="home-label">To Do</ion-label>
+                <ion-label class="home-label">Tasks</ion-label>
               </ion-button>
             </ion-col>
             <ion-col size="6">
