@@ -16,6 +16,7 @@ class Habit(UUIDBase):
 
     name: Mapped[str]
     frequency: Mapped[int] = mapped_column(CheckConstraint("frequency >= 1", name="frequency_gte_1"))
+    duration: Mapped[int] = mapped_column(CheckConstraint("duration >= 1", name="duration_gte_1"))
     repeat_interval: Mapped[str] = mapped_column(Enum(RepeatIntervalEnum, name="repeat_interval"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"))
 

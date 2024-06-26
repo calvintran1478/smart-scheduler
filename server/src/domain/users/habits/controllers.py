@@ -26,6 +26,7 @@ class HabitController(Controller):
             user_id=user.id,
             name=data.name,
             frequency=data.frequency,
+            duration=data.duration,
             repeat_interval=data.repeat_interval
         )
 
@@ -54,4 +55,4 @@ class HabitController(Controller):
 
     @delete(path="/{habit_name:str}")
     async def remove_habit(self, habit: Habit, habits_repo: HabitRepository) -> None:
-        await habits_repo.delete(habit.id)
+        await habits_repo.delete(habit.id, auto_commit=True)
