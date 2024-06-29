@@ -1,5 +1,6 @@
 from pydantic import BaseModel, PositiveInt
 from typing import Optional
+from datetime import date
 from domain.users.habits.validators import HabitName, RepeatInterval
 
 class CreateHabitInput(BaseModel):
@@ -13,3 +14,6 @@ class UpdateHabitInput(BaseModel):
     frequency: Optional[PositiveInt] = None
     duration: Optional[PositiveInt] = None
     repeat_interval: Optional[RepeatInterval] = None
+
+class CompleteHabitInput(BaseModel):
+    completion_date: date

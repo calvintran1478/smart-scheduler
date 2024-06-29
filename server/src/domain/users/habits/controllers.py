@@ -5,14 +5,15 @@ from litestar.di import Provide
 
 from models.user import User
 from models.habit import Habit
-from domain.users.habits.repositories import HabitRepository
-from domain.users.habits.dependencies import provide_habits_repo, provide_habit
-from domain.users.habits.schemas import CreateHabitInput, UpdateHabitInput
-from domain.users.habits.dtos import HabitDTO
+from models.habit_completion import HabitCompletion
+from domain.users.habits.repositories import HabitRepository, HabitCompletionRepository
+from domain.users.habits.dependencies import provide_habits_repo, provide_habit_completions_repo, provide_habit
+from domain.users.habits.schemas import CreateHabitInput, UpdateHabitInput, CompleteHabitInput
+from domain.users.habits.dtos import HabitDTO, HabitCompletionDTO
 from domain.users.habits.hooks import after_habit_get_request
 
 class HabitController(Controller):
-    dependencies = {"habits_repo": Provide(provide_habits_repo), "habit": Provide(provide_habit)}
+    dependencies = {"habits_repo": Provide(provide_habits_repo), "habit_completions_repo": Provide(provide_habit_completions_repo), "habit": Provide(provide_habit)}
 
     @post(path="/", return_dto=HabitDTO)
     async def create_habit(self, data: CreateHabitInput, user: User, habits_repo: HabitRepository) -> Habit:
@@ -56,3 +57,18 @@ class HabitController(Controller):
     @delete(path="/{habit_name:str}")
     async def remove_habit(self, habit: Habit, habits_repo: HabitRepository) -> None:
         await habits_repo.delete(habit.id, auto_commit=True)
+
+    @post(path="/{habit_name:str}/completions", return_dto=HabitCompletionDTO)
+    async def complete_habit(self, data: CompleteHabitInput, habit: Habit, habit_completions_repo: HabitCompletionRepository) -> HabitCompletion:
+        # Check if habit was completed earlier this date
+        habit_completion = await habit_completions_repo.get_one_or_none(user_id=habit.user_id, habit_name=habit.name, completion_date=data.completion_date)
+
+        # Increment completion count
+        if (habit_completion != None):
+            habit_completion.count += 1
+            await habit_completions_repo.update(habit_completion, auto_commit=True)
+        else:
+            habit_completion = HabitCompletion(user_id=habit.user_id, habit_name=habit.name, completion_date=data.completion_date)
+            await habit_completions_repo.add(habit_completion, auto_commit=True)
+
+        return habit_completion
