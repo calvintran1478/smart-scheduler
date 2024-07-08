@@ -38,10 +38,10 @@ class ConstraintSatisfactionProblem:
         self.variable_domains = variable_domains
         self.constraints = constraints
 
-def forward_check(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, var: TimeVariable, value: int) -> Failure | None:
+def forward_check(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, assigned_var: TimeVariable, value: int, preferred_value_spacing: int) -> Failure | None:
     """Remove domain values which are inconsistent with the given assignment. If a domain becomes empty in this process a failure is returned"""
     # Determine interval numbers directly blocked by assignment
-    intervals_occupied = list(range(value, value + var.duration)) 
+    intervals_occupied = list(range(value, value + assigned_var.duration)) 
 
     # Reduce unassigned variable domains based on new assignment
     unassigned_variables = [var for var in assignment.keys() if assignment[var] == None]  
@@ -54,11 +54,22 @@ def forward_check(csp: ConstraintSatisfactionProblem, assignment: PartialSolutio
         if (len(csp.variable_domains[unassigned_var]) == 0):
             return FAILURE
 
-def backtracking_search(csp: ConstraintSatisfactionProblem) -> Optional[Solution]:
-    empty_solution = {k: None for k in sorted(csp.variable_domains.keys(), key=lambda var: var.duration, reverse=True)}
-    return backtrack(empty_solution, csp)
+        # Prioritize values away from the new assignment based on the preferred spacing
+        first_interval = value
+        last_interval = first_interval + assigned_var.duration - 1
+        intervals_to_shift = [interval for interval in range(first_interval - preferred_value_spacing, first_interval)] + [interval for interval in range(last_interval + 1, last_interval + 1 + preferred_value_spacing)]
+        for interval in intervals_to_shift:
+            try:
+                csp.variable_domains[unassigned_var].remove(interval)
+                csp.variable_domains[unassigned_var].append(interval)
+            except ValueError:
+                pass
 
-def backtrack(assignment: PartialSolution, csp: ConstraintSatisfactionProblem) -> Optional[Solution]:
+def backtracking_search(csp: ConstraintSatisfactionProblem, preferred_value_spacing: int) -> Optional[Solution]:
+    empty_solution = {k: None for k in sorted(csp.variable_domains.keys(), key=lambda var: var.duration, reverse=True)}
+    return backtrack(csp, empty_solution, preferred_value_spacing)
+
+def backtrack(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, preferred_value_spacing: int) -> Optional[Solution]:
     # Check if assignment is complete
     if (None not in assignment.values()):
         return assignment
@@ -75,11 +86,11 @@ def backtrack(assignment: PartialSolution, csp: ConstraintSatisfactionProblem) -
         assignment[curr_var] = value
 
         # Apply forward checking to reduce variable domains
-        inferences = forward_check(csp, assignment, curr_var, value)
+        inferences = forward_check(csp, assignment, curr_var, value, preferred_value_spacing)
 
         # If variable assignment leads to a valid solution return the result
         if (inferences != FAILURE):
-            result = backtrack(assignment, csp)
+            result = backtrack(csp, assignment, preferred_value_spacing)
             if (result != None):
                 return result
 
@@ -87,17 +98,18 @@ def backtrack(assignment: PartialSolution, csp: ConstraintSatisfactionProblem) -
         assignment[curr_var] = None
         csp.variable_domains = deepcopy(original_variable_domains)
 
-def schedule_work_sessions(time_blocks: list[TimeBlock], schedule_id: UUID, session_durations: list[int], best_focus_times: list[TimeBlock]) -> list[ScheduleItem]:
-    # Initalize starting domain
-    num_intervals = 24 * 4
+def schedule_work_sessions(time_blocks: list[TimeBlock], schedule_id: UUID, session_durations: list[int], best_focus_times: list[TimeBlock], preferred_break_length: int) -> list[ScheduleItem]:
+    # Initialize starting domain
     seconds_per_interval = 60 * 15
+    num_intervals = floor(86400 / seconds_per_interval)
     domain = list(range(num_intervals))
     start_intervals = []
     for time_block in time_blocks:
         # Get interval numbers that overlap with the time block
         first_interval = floor(time_block[0] / seconds_per_interval)
-        last_interval = floor(time_block[1] / seconds_per_interval)
-        interval_numbers = range(first_interval, last_interval + 1)
+        result = time_block[1] / seconds_per_interval
+        last_interval = result - 1 if result.is_integer() else floor(result)
+        interval_numbers = range(first_interval, int(last_interval) + 1)
 
         # Reduce domain
         domain = [x for x in domain if x not in interval_numbers]
@@ -108,8 +120,9 @@ def schedule_work_sessions(time_blocks: list[TimeBlock], schedule_id: UUID, sess
     # Prioritize best focus times
     for preferred_time_interval in best_focus_times:
         first_best_focus_interval = floor(preferred_time_interval[0] / seconds_per_interval)
-        last_best_focus_interval = floor(preferred_time_interval[1] / seconds_per_interval)
-        for interval in range(last_best_focus_interval, first_best_focus_interval - 1):
+        result = preferred_time_interval[1] / seconds_per_interval
+        last_best_focus_interval = result - 1 if result.is_integer() else floor(result)
+        for interval in range(int(last_best_focus_interval), first_best_focus_interval - 1, -1):
             try:
                 domain.remove(interval)
                 domain.insert(0, interval)
@@ -129,7 +142,8 @@ def schedule_work_sessions(time_blocks: list[TimeBlock], schedule_id: UUID, sess
 
     # Solve constraint satisfaction problem to produce user work sessions
     csp = ConstraintSatisfactionProblem(variable_domains, [])
-    solution = backtracking_search(csp)
+    preferred_value_spacing = ceil(preferred_break_length / seconds_per_interval)
+    solution = backtracking_search(csp, preferred_value_spacing)
     if (solution != None):
         return [ScheduleItem(
             name="Work session",

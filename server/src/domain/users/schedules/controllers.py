@@ -79,7 +79,7 @@ class ScheduleController(Controller):
             best_focus_times += get_time_blocks(preferred_time_interval.start_time, preferred_time_interval.end_time)
 
         # Get work sessions
-        schedule.schedule_items += schedule_work_sessions(time_blocks, schedule.id, session_durations, best_focus_times)
+        schedule.schedule_items += schedule_work_sessions(time_blocks, schedule.id, session_durations, best_focus_times, preferences.break_length * 60)
 
         # Save schedule items
         await schedules_repo.update(schedule, auto_commit=True)
