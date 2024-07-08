@@ -37,7 +37,7 @@ class EventController(Controller):
             start_time=convert_to_utc(data.timezone, data.start_time),
             end_time=convert_to_utc(data.timezone, data.end_time),
             repeat_rule=data.repeat_rule,
-            until=convert_to_utc(data.timezone, datetime.combine(data.until, time(23, 59, 59))),
+            until=convert_to_utc(data.timezone, datetime.combine(data.until, time(23, 59, 59))) if (data.until != None) else None,
             description=data.description,
             location=data.location,
         )
@@ -45,7 +45,7 @@ class EventController(Controller):
         await events_repo.add(event, auto_commit=True)
 
         return event
-    
+
     @get(path="/", return_dto=EventDTO, after_request=after_event_get_request)
     async def get_events(self, user: User, events_repo: EventRepository, start: str, end: str, timezone: str) -> list[Event]:
         # Validate query paramters

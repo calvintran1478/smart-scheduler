@@ -29,7 +29,7 @@ def validate_new_times(update_data, event: Event) -> tuple[datetime, datetime]:
 
     new_end_time = convert_to_utc(update_data.timezone, update_data.end_time) \
         if (update_data.end_time != None) else event.end_time
-    
+
     new_until = convert_to_utc(update_data.timezone, datetime.combine(update_data.until, time(23, 59, 59))) \
         if (update_data.until != None) else event.until
 
