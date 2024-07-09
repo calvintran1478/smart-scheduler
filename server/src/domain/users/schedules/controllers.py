@@ -35,14 +35,15 @@ class ScheduleController(Controller):
         events_repo: EventRepository,
         timezone: str
     ) -> Schedule:
-        # Fetch schedule if already generated
-        schedule, created = await schedules_repo.get_or_create(user_id=user.id, date=schedule_date, auto_commit=True)
-        if (not created):
+        # Fetch schedule if already generated and does not require refresh
+        schedule, created = await schedules_repo.get_or_create(user_id=user.id, date=schedule_date)
+        if (not created and not schedule.requires_refresh):
             return schedule
 
         # Initialize variables
         time_blocks = []
         timezone_format = check_timezone(timezone)
+        schedule.schedule_items.clear()
 
         # Define session durations
         session_durations = [3600, 3600, 3600, 3600]
@@ -82,6 +83,7 @@ class ScheduleController(Controller):
         schedule.schedule_items += schedule_work_sessions(time_blocks, schedule.id, session_durations, best_focus_times, preferences.break_length * 60)
 
         # Save schedule items
+        schedule.requires_refresh = False
         await schedules_repo.update(schedule, auto_commit=True)
 
         return schedule

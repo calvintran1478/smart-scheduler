@@ -9,9 +9,11 @@ from domain.users.preferences.repositories import PreferenceRepository, Preferre
 from domain.users.preferences.dependencies import provide_preferences_repo, provide_preferred_time_interval_repo
 from domain.users.preferences.schemas import SetPreferencesInput
 from domain.users.preferences.dtos import PreferenceDTO
+from domain.users.schedules.repositories import ScheduleRepository
+from domain.users.schedules.dependencies import provide_schedules_repo
 
 class PreferenceController(Controller):
-    dependencies = {"preferences_repo": Provide(provide_preferences_repo), "preferred_time_intervals_repo": Provide(provide_preferred_time_interval_repo)}
+    dependencies = {"preferences_repo": Provide(provide_preferences_repo), "preferred_time_intervals_repo": Provide(provide_preferred_time_interval_repo), "schedules_repo": Provide(provide_schedules_repo)}
 
     @put(path="/")
     async def set_preferences(
@@ -20,6 +22,7 @@ class PreferenceController(Controller):
         user: User,
         preferences_repo: PreferenceRepository,
         preferred_time_intervals_repo: PreferredTimeIntervalRepository,
+        schedules_repo: ScheduleRepository
     ) -> dict[str, str]:
         # Check existence of preference settings
         preference_result = await preferences_repo.get_one_or_none(user_id=user.id)
@@ -56,6 +59,9 @@ class PreferenceController(Controller):
         ) for interval in data.best_focus_times]
 
         await preferred_time_intervals_repo.add_many(best_focus_times, auto_commit=True)
+
+        # Mark schedules for refresh
+        await schedules_repo.mark_schedules_for_refresh(user.id)
 
         # Send appropriate response based on whether preferences were created or updated
         if (not preference_exists and not time_exists):
