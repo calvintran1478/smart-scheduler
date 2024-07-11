@@ -47,8 +47,19 @@
     },
     methods: {
       async fetchHabits() {
+        const token = localStorage.getItem("token");
+        if (!token) {
+            console.error("No token found");
+            return;
+        }
         try {
-          const response = await fetch('http://localhost:8000/api/v1/users/habits');
+          const response = await fetch('http://localhost:8000/api/v1/users/habits', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
           if (response.status === 200) {
             const data = await response.json();
             this.habits = data.habits;

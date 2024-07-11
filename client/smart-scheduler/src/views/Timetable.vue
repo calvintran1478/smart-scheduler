@@ -42,8 +42,18 @@
       async fetchSchedule() {
         const date = format(new Date(), 'yyyy-MM-dd');
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const token = localStorage.getItem("token");
+        if (!token) {
+            console.error("No token found");
+            return;
+        }
         try {
-          const response = await fetch(`http://localhost:8000/api/v1/users/schedules/${date}?timezone=${timezone}`);
+            const response = await fetch(`http://localhost:8000/api/v1/users/schedules/${date}?timezone=${timezone}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+            });
           if (response.status === 200) {
             const data = await response.json();
             this.scheduleItems = data.schedule_items;

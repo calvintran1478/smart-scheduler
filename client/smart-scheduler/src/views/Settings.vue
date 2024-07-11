@@ -37,8 +37,8 @@
           <div class="form-group">
             <ion-label>Do you tend to procrastinate?</ion-label>
             <ion-select v-model="tend_to_procrastinate" interface="popover">
-              <ion-select-option value="true">Yes</ion-select-option>
-              <ion-select-option value="false">No</ion-select-option>
+              <ion-select-option :value="true">Yes</ion-select-option>
+              <ion-select-option :value="false">No</ion-select-option>
             </ion-select>
           </div>
           <ion-button expand="block" type="submit" class="custom_button"
@@ -83,6 +83,19 @@ export default defineComponent({
         return;
       }
       console.log(token);
+      /*
+      const payload = JSON.stringify({
+              wake_up_time: this.wake_up_time + ':00',
+              sleep_time: this.sleep_time + ':00',
+              best_focus_times: [`${this.best_focus_time_start}:00 - ${this.best_focus_time_end}:00`],
+              break_length: this.break_length,
+              tend_to_procrastinate: this.tend_to_procrastinate,
+            })
+      
+      console.log(payload);
+      console.log(typeof(this.tend_to_procrastinate));
+      */
+      
       try {
         const response = await fetch(
           "http://localhost:8000/api/v1/users/preferences/",
@@ -92,11 +105,12 @@ export default defineComponent({
               "Content-Type": "application/json",
               // add authorization
               "Authorization": `Bearer ${token}`
+              
             },
             body: JSON.stringify({
-              wake_up_time: this.wake_up_time,
-              sleep_time: this.sleep_time,
-              best_focus_times: [`${this.best_focus_time_start} - ${this.best_focus_time_end}`],
+              wake_up_time: this.wake_up_time + ':00',
+              sleep_time: this.sleep_time + ':00',
+              best_focus_times: [`${this.best_focus_time_start}:00 - ${this.best_focus_time_end}:00`],
               break_length: this.break_length,
               tend_to_procrastinate: this.tend_to_procrastinate,
             }),
@@ -106,8 +120,8 @@ export default defineComponent({
           throw new Error("Settings failed");
         }
         console.log("Settings successful");
-        // Redirect to login page if successful
-        this.$router.push({ name: "Login" });
+        // Redirect to home page if successful
+        this.$router.push('/home');
       } catch (error) {
         console.error("Error during settings:", error);
       }
