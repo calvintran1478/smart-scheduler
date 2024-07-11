@@ -27,7 +27,7 @@
             </div>
           </div>
           <div class="form-group">
-            <ion-label>How long of a break do you like to take between work sessions?</ion-label>
+            <ion-label>How long of a break (in minutes) do you like to take between work sessions?</ion-label>
             <ion-select v-model="break_length" interface="popover">
               <ion-select-option v-for="minutes in 61" :value="minutes - 1" :key="minutes">
                 {{ minutes - 1 }}
@@ -77,6 +77,12 @@ export default defineComponent({
   },
   methods: {
     async userSettings() {
+      const token = localStorage.getItem("token"); // Retrieve token from localStorage
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+      console.log(token);
       try {
         const response = await fetch(
           "http://localhost:8000/api/v1/users/preferences/",
@@ -85,12 +91,12 @@ export default defineComponent({
             headers: {
               "Content-Type": "application/json",
               // add authorization
-              "Authorization": 'Bearer '
+              "Authorization": 'Bearer ${token}'
             },
             body: JSON.stringify({
               wake_up_time: this.wake_up_time,
               sleep_time: this.sleep_time,
-              best_focus_times: [this.best_focus_time_start, this.best_focus_time_end],
+              best_focus_times: [`${this.best_focus_time_start} - ${this.best_focus_time_end}`],
               break_length: this.break_length,
               tend_to_procrastinate: this.tend_to_procrastinate,
             }),

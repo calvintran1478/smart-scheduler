@@ -80,6 +80,8 @@ export default defineComponent({
         }
 
         console.log("Login successful");
+        // Store the token in localStorage
+        localStorage.setItem("token", data.access_token);
         // Redirect to homepage
         this.$router.push('/home');
       } catch (error) {
