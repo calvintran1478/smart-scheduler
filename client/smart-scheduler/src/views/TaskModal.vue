@@ -63,6 +63,12 @@
         this.$emit('close');
       },
       async createTask() {
+        const token = localStorage.getItem("token"); // Retrieve token from localStorage
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+      console.log(token);
         const task = {
           name: this.name,
           deadline_date: this.date.split('T')[0],
@@ -74,7 +80,8 @@
           const response = await fetch('http://localhost:8000/api/v1/users/tasks', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              "Authorization": `Bearer ${token}`
             },
             body: JSON.stringify(task)
           });

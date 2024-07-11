@@ -91,7 +91,7 @@ export default defineComponent({
             headers: {
               "Content-Type": "application/json",
               // add authorization
-              "Authorization": 'Bearer ${token}'
+              "Authorization": `Bearer ${token}`
             },
             body: JSON.stringify({
               wake_up_time: this.wake_up_time,

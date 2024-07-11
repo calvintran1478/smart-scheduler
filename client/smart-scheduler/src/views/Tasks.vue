@@ -59,11 +59,18 @@
       };
   
       const fetchTasks = async () => {
+        const token = localStorage.getItem("token"); // Retrieve token from localStorage
+        if (!token) {
+          console.error("No token found");
+          return;
+        }
+        console.log(token);
         try {
           const response = await fetch('http://localhost:8000/api/v1/users/tasks', {
             method: 'GET',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              "Authorization": `Bearer ${token}`
             }
           });
           if (response.ok) {
