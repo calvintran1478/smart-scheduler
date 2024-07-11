@@ -5,6 +5,7 @@ import Settings from '../views/Settings.vue'
 import Home from '../views/Home.vue'
 import Tasks from '../views/Tasks.vue'
 import Habits from '../views/Habits.vue'
+import Pomodoro from '../views/Pomodoro.vue'
 
 const routes = [
   {
@@ -40,6 +41,11 @@ const routes = [
     path: '/habits',
     name: 'Habits',
     component: Habits
+  },
+  {
+    path: '/pomodoro',
+    name: 'Pomodoro',
+    component: Pomodoro
   }
 ]
 

@@ -48,7 +48,7 @@
     methods: {
       async fetchHabits() {
         try {
-          const response = await fetch('/api/v1/users/habits');
+          const response = await fetch('http://localhost:8000/api/v1/users/habits');
           if (response.status === 200) {
             const data = await response.json();
             this.habits = data.habits;

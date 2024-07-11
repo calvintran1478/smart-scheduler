@@ -60,7 +60,7 @@
   
       const fetchTasks = async () => {
         try {
-          const response = await fetch('/api/v1/users/tasks', {
+          const response = await fetch('http://localhost:8000/api/v1/users/tasks', {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json'

@@ -84,6 +84,8 @@ export default defineComponent({
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
+              // add authorization
+              "Authorization": 'Bearer '
             },
             body: JSON.stringify({
               wake_up_time: this.wake_up_time,

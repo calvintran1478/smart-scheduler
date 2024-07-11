@@ -69,7 +69,7 @@
         };
   
         try {
-          const response = await fetch('/api/v1/users/habits', {
+          const response = await fetch('http://localhost:8000/api/v1/users/habits', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

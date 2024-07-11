@@ -71,7 +71,7 @@
         };
   
         try {
-          const response = await fetch('/api/v1/users/tasks', {
+          const response = await fetch('http://localhost:8000/api/v1/users/tasks', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

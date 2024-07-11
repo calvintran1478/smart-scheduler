@@ -83,6 +83,7 @@ export default defineComponent({
           throw new Error("Register failed");
         }
         console.log("Register successful");
+        // log user in
         // Redirect to settings page if successful
         this.$router.push({ name: "Settings" });
       } catch (error) {
