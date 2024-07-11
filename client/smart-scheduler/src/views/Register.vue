@@ -48,6 +48,8 @@ import {
   IonPage,
 } from "@ionic/vue";
 import { defineComponent } from "vue";
+import { getDeviceId } from '../services/device';
+
 export default defineComponent({
   components: { IonButton, IonLabel, IonInput, IonItem, IonContent, IonPage },
   data() {
@@ -66,7 +68,6 @@ export default defineComponent({
         return;
       }
       try {
-        // endpoint is /?
         const response = await fetch("http://localhost:8000/api/v1/users", {
           method: "POST",
           headers: {
@@ -83,11 +84,45 @@ export default defineComponent({
           throw new Error("Register failed");
         }
         console.log("Register successful");
-        // log user in
-        // Redirect to settings page if successful
-        this.$router.push({ name: "Settings" });
+
+        // Automatically log the user in
+        await this.loginUser();
+        
       } catch (error) {
         console.error("Error during register:", error);
+      }
+    },
+    async loginUser() {
+      try {
+        const deviceId = getDeviceId();
+        const response = await fetch("http://localhost:8000/api/v1/users/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: this.email,
+            password: this.password,
+            device_id: deviceId,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Login failed");
+        }
+        const data = await response.json();
+        if (!data.access_token) {
+          throw new Error("Did not receive token");
+        }
+
+        // Store the token in localStorage
+        localStorage.setItem("token", data.access_token);
+
+        console.log("Login successful");
+
+        // Redirect to settings page
+        this.$router.push('/settings');
+      } catch (error) {
+        console.error("Error during login:", error);
       }
     },
   },
@@ -101,7 +136,7 @@ export default defineComponent({
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: center; /* Center items horizontally */
+  align-items: center; 
 }
 
 .form-group {
