@@ -75,15 +75,13 @@ export default defineComponent({
           throw new Error("Login failed");
         }
         const data = await response.json();
-        if (!data.token) {
+        if (!data.access_token) {
           throw new Error("Did not receive token");
         }
-        // Store the token in localStorage (for now)??
-        // localStorage.setItem("token", data.token);
-        // set as cookie, not needed?
-        // setCookie('refresh-token', data.access_token, 1);
 
         console.log("Login successful");
+        // Redirect to homepage
+        this.$router.push('/home');
       } catch (error) {
         console.error("Error during login:", error);
       }
