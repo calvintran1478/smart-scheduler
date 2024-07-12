@@ -17,5 +17,5 @@ class Preference(UUIDBase):
     tend_to_procrastinate: Mapped[Optional[bool]]
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"))
 
-    best_focus_times: Mapped[list["PreferredTimeInterval"]] = relationship(back_populates="preference", lazy="selectin", passive_deletes=True)
+    best_focus_times: Mapped[list["PreferredTimeInterval"]] = relationship(back_populates="preference", lazy="selectin", passive_deletes=True, cascade="all, delete-orphan")
     user: Mapped["User"] = relationship(back_populates="preference")
