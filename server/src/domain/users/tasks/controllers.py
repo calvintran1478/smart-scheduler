@@ -35,6 +35,7 @@ class TaskController(Controller):
         task = Task(
             name = data.name,
             deadline = convert_to_utc(data.timezone, datetime.combine(data.deadline_date, data.deadline_time)),
+            time_estimate = data.time_estimate,
             tag_id = tag_id,
             user_id = user.id
         )

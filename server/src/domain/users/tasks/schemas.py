@@ -11,12 +11,14 @@ class CreateTaskInput(BaseModel):
     name: str
     deadline_date: date
     deadline_time: Optional["datetime.time"] = time(23, 59, 59)
+    time_estimate: time
     timezone: TimeZone
     tag: Optional[str] = None
 
 class UpdateTaskInput(BaseModel):
     name: Optional[str] = None
     deadline: Optional["datetime.datetime"] = None
+    time_estimate: Optional["datetime.time"] = None
     timezone: Optional[TimeZone] = None
     done: Optional[bool] = None
     tag: Optional[str] = None
