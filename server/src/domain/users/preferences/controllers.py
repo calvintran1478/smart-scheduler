@@ -36,6 +36,8 @@ class PreferenceController(Controller):
             user_id = user.id,
             wake_up_time = data.wake_up_time,
             sleep_time = data.sleep_time,
+            start_of_work_day = data.start_of_work_day,
+            end_of_work_day = data.end_of_work_day,
             break_length = data.break_length,
             tend_to_procrastinate = data.tend_to_procrastinate
         )
@@ -68,6 +70,8 @@ class PreferenceController(Controller):
             preference_representation = {
                 "wake_up_time": data.wake_up_time,
                 "sleep_time": data.sleep_time,
+                "start_of_work_day": data.start_of_work_day,
+                "end_of_work_day": data.end_of_work_day,
                 "break_length": data.break_length,
                 "tend_to_procrastinate": data.tend_to_procrastinate,
                 "best_focus_times": data.best_focus_times
