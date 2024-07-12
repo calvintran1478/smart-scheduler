@@ -18,7 +18,15 @@ class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
         if not auth_header:
             raise NotAuthorizedException
 
-        access_claims = parse_claims(auth_header.split()[1])
+        # Get access token claims
+        auth_header_components = auth_header.split()
+        if (len(auth_header_components) != 2 or auth_header_components[0] != "Bearer"):
+            raise NotAuthorizedException
+        access_claims = parse_claims(auth_header_components[1])
+
+        # Get refresh token claims
+        if ("refresh-token" not in connection.cookies.keys()):
+            raise NotAuthorizedException
         refresh_claims = parse_claims(connection.cookies["refresh-token"])
 
         session_maker = async_sessionmaker()
