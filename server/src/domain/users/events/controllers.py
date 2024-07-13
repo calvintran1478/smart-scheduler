@@ -8,12 +8,15 @@ from models.user import User
 from models.event import Event
 from models.updated_event_instance import UpdatedEventInstance
 from models.exception_date import ExceptionDate
+from models.schedule_item import ScheduleItemTypeEnum
 from domain.users.events.repositories import EventRepository, ExceptionDateRepository, UpdatedEventInstanceRepository
 from domain.users.events.dependencies import provide_events_repo, provide_exception_dates_repo, provide_updated_event_instances_repo, provide_event
 from domain.users.events.schemas import CreateEventInput, UpdateEventInput
 from domain.users.events.dtos import UpdateEventDTO, EventDTO
 from domain.users.events.hooks import after_event_get_request
 from domain.users.events.validators import validate_new_times, validate_event_query_parameters
+from domain.users.schedules.repositories import ScheduleRepository
+from domain.users.schedules.dependencies import provide_schedules_repo
 from lib.time import convert_to_utc
 from lib.event import get_updated_event_instance_from_event
 
@@ -25,11 +28,12 @@ class EventController(Controller):
         "events_repo": Provide(provide_events_repo),
         "exception_dates_repo": Provide(provide_exception_dates_repo),
         "updated_event_instances_repo": Provide(provide_updated_event_instances_repo),
+        "schedules_repo": Provide(provide_schedules_repo),
         "event": Provide(provide_event)
     }
 
     @post(path="/", return_dto=EventDTO)
-    async def create_event(self, data: CreateEventInput, user: User, events_repo: EventRepository) -> Event:
+    async def create_event(self, data: CreateEventInput, user: User, events_repo: EventRepository, schedules_repo: ScheduleRepository) -> Event:
         # Create event for the user
         event = Event(
             user_id=user.id,
@@ -42,7 +46,10 @@ class EventController(Controller):
             location=data.location,
         )
 
-        await events_repo.add(event, auto_commit=True)
+        await events_repo.add(event, auto_commit=True, auto_expunge=True)
+
+        # Mark schedules for refresh
+        await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
 
         return event
 
@@ -59,10 +66,12 @@ class EventController(Controller):
     async def update_event(
         self,
         data: DTOData[UpdateEventInput],
+        user: User,
         event: Event,
         events_repo: EventRepository,
         exception_dates_repo: ExceptionDateRepository,
         updated_event_instances_repo: UpdatedEventInstanceRepository,
+        schedules_repo: ScheduleRepository,
         start: Optional[str] = None,
         timezone: Optional[str] = None
     ) -> None:
@@ -91,6 +100,9 @@ class EventController(Controller):
                 # Remove updated instances after the new until value (if changed to be earlier)
                 if (old_until == None and new_until != None or old_until != None and new_until < old_until):
                     await updated_event_instances_repo.delete_after_date(event.id, new_until)
+
+                # Mark schedules for refresh
+                await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
 
         # Update a particular instance of the event
         elif (start != None and timezone != None):
@@ -128,6 +140,10 @@ class EventController(Controller):
             if (instance_type == "event_instance"):
                 await updated_event_instances_repo.add(updated_instance, auto_commit=True)
 
+            # Mark schedules for refresh
+            if (update_data.timezone == None):
+                await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+
         # Handle missing query parameters
         else:
             raise ClientException(detail="Start and timezone query parameters must both appear or not at all")
@@ -135,16 +151,21 @@ class EventController(Controller):
     @delete(path="/{event_id:str}")
     async def remove_event(
         self,
+        user: User,
         event: Event,
         events_repo: EventRepository,
         exception_dates_repo: ExceptionDateRepository,
         updated_event_instances_repo: UpdatedEventInstanceRepository,
+        schedules_repo: ScheduleRepository,
         start: Optional[str] = None,
         timezone: Optional[str] = None
     ) -> None:
         # Delete all instances of the event
         if (event.repeat_rule == "NEVER" or (start == timezone == None)):
             await events_repo.delete(event.id, auto_commit=True)
+
+            # Mark schedules for refresh
+            await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
 
         # Delete a particular instance of the event
         elif (start != None and timezone != None):
@@ -163,6 +184,9 @@ class EventController(Controller):
             # Delete updated instance if one exists
             if (instance_type == "updated_instance"):
                 await updated_event_instances_repo.delete_by_start_time_and_event_id(start_time, event.id)
+
+            # Mark schedules for refresh
+            await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
 
         # Handle missing query parameters
         else:

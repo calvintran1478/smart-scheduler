@@ -87,16 +87,14 @@ class ScheduleBuilder:
         start_time = convert_to_utc(timezone_format, datetime(self.schedule.date.year, self.schedule.date.month, self.schedule.date.day))
         end_time = start_time + timedelta(days=1)
         events = await events_repo.get_events_in_range(user.id, start_time, end_time, timezone_format)
-        for event in events:
-            time_obj_blocks = get_time_obj_blocks(event.start_time.time(), event.end_time.time())
-            self.schedule.schedule_items += [
-                ScheduleItem(
-                    name=event.summary,
-                    start_time=time_obj_block[0],
-                    end_time=time_obj_block[1],
-                    schedule_item_type=ScheduleItemTypeEnum.EVENT,
-                ) for time_obj_block in time_obj_blocks
-            ]
+        self.schedule.schedule_items += [
+            ScheduleItem(
+                name=event.summary,
+                start_time=time() if (event.start_time.date() < self.schedule.date) else event.start_time.time(),
+                end_time=time(23, 59, 59) if (event.end_time.date() > self.schedule.date) else event.end_time.time(),
+                schedule_item_type=ScheduleItemTypeEnum.EVENT,
+            ) for event in events
+        ]
 
         self.schedule.requires_event_refresh = False
 
