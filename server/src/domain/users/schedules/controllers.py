@@ -14,7 +14,6 @@ from domain.users.events.dependencies import provide_events_repo
 from domain.users.events.validators import check_timezone
 from lib.time import convert_to_utc, seconds_to_time_object
 from lib.schedule import requires_refresh, ScheduleBuilder, ScheduleDirector
-from lib.constraint import schedule_work_sessions
 
 from datetime import date, datetime, timedelta
 

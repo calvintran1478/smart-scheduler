@@ -14,6 +14,7 @@ from lib.time import seconds_to_time_object
 FAILURE = "FAILURE"
 
 # Type definitions
+type DailyItem = tuple[str, int, ScheduleItemTypeEnum]
 type TimeBlock = tuple[float, float]
 type Domain = Generator[int, None, None]
 type Relation = callable[[dict[TimeVariable, int]], bool]
@@ -25,10 +26,12 @@ type Failure = Literal[FAILURE]
 class TimeVariable:
     name: str
     duration: int # in multiples of 15 minutes
+    schedule_item_type: ScheduleItemTypeEnum
 
-    def __init__(self, name: str, duration: int) -> None:
+    def __init__(self, name: str, duration: int, schedule_item_type: ScheduleItemTypeEnum) -> None:
         self.name = name
         self.duration = duration
+        self.schedule_item_type = schedule_item_type
 
 class ConstraintSatisfactionProblem:
     variable_domains: dict[TimeVariable, Domain]
@@ -99,10 +102,11 @@ def backtrack(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, p
                 return result
 
         # Otherwise recover original domains to try a new variable assignment
+        assignment[curr_var] = None
         for k, v in original_variable_domains.items():
             csp.variable_domains[k] = (x for x in v)
 
-def schedule_work_sessions(time_blocks: list[TimeBlock], schedule_id: UUID, session_durations: list[int], best_focus_times: list[TimeBlock], preferred_break_length: int) -> list[ScheduleItem]:
+def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[DailyItem], preferred_times: list[list[TimeBlock]], preferred_spacing: int) -> list[ScheduleItem]:
     # Initialize starting domain
     seconds_per_interval = 60 * 15
     num_intervals = floor(86400 / seconds_per_interval)
@@ -121,40 +125,42 @@ def schedule_work_sessions(time_blocks: list[TimeBlock], schedule_id: UUID, sess
         # Track start intervals for variable specific domain reductions
         start_intervals.append(first_interval)
 
-    # Prioritize best focus times
-    domain_lst = list(domain)
-    for preferred_time_interval in best_focus_times:
-        first_best_focus_interval = floor(preferred_time_interval[0] / seconds_per_interval)
-        result = preferred_time_interval[1] / seconds_per_interval
-        last_best_focus_interval = result - 1 if result.is_integer() else floor(result)
-        for interval in range(int(last_best_focus_interval), first_best_focus_interval - 1, -1):
-            try:
-                domain_lst.remove(interval)
-                domain_lst.insert(0, interval)
-            except ValueError:
-                pass
-
     # Create time variables
-    time_variables = [TimeVariable(i, ceil(duration / seconds_per_interval)) for i, duration in enumerate(session_durations)]
+    time_variables = [TimeVariable(name, ceil(duration / seconds_per_interval), schedule_item_type) for name, duration, schedule_item_type in daily_items]
 
     # Determine domain for each variable
+    domain_lst = list(domain)
     variable_domains = {}
-    for time_variable in time_variables:
+    for i, time_variable in enumerate(time_variables):
+        # Reduce domain to viable values
         variable_domains[time_variable] = (x for x in domain_lst if x not in range(num_intervals - time_variable.duration + 1, num_intervals))
         for start_interval in start_intervals:
             variable_domains[time_variable] = (x for x in variable_domains[time_variable] if x not in range(start_interval - time_variable.duration + 1, start_interval))
 
-    # Solve constraint satisfaction problem to produce user work sessions
+        # Prioritize values
+        variable_domain_lst = list(variable_domains[time_variable])
+        for preferred_time_interval in preferred_times[i]:
+            first_preferred_interval = floor(preferred_time_interval[0] / seconds_per_interval)
+            result = preferred_time_interval[1] / seconds_per_interval
+            last_preferred_interval = result - 1 if result.is_integer() else floor(result)
+            for interval in range(int(last_preferred_interval), first_preferred_interval - 1, -1):
+                try:
+                    variable_domain_lst.remove(interval)
+                    variable_domain_lst.insert(0, interval)
+                except ValueError:
+                    pass
+        variable_domains[time_variable] = (x for x in variable_domain_lst)
+
+    # Solve constraint satisfaction problem to produce a schedule for the given daily items
     csp = ConstraintSatisfactionProblem(variable_domains, [])
-    preferred_value_spacing = ceil(preferred_break_length / seconds_per_interval)
+    preferred_value_spacing = ceil(preferred_spacing / seconds_per_interval)
     solution = backtracking_search(csp, preferred_value_spacing)
     if (solution != None):
         return [ScheduleItem(
-            name="Work session",
+            name=time_variable.name,
             start_time=seconds_to_time_object(start_interval * seconds_per_interval),
             end_time=seconds_to_time_object((start_interval + time_variable.duration) * seconds_per_interval),
-            schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION,
-            schedule_id=schedule_id
+            schedule_item_type=time_variable.schedule_item_type,
         ) for time_variable, start_interval in solution.items()]
     else:
-        raise ClientException(detail="Could not find time slots for work sessions", status_code=HTTP_409_CONFLICT)
+        raise ClientException(detail="Could not find time slots for daily items", status_code=HTTP_409_CONFLICT)

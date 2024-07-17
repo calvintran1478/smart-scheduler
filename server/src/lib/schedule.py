@@ -4,7 +4,7 @@ from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
 from models.preference import Preference
 from domain.users.events.repositories import EventRepository
 from lib.time import convert_to_utc
-from lib.constraint import TimeBlock, schedule_work_sessions
+from lib.constraint import TimeBlock, schedule_daily_items
 from datetime import time, datetime, timedelta
 from pytz import timezone
 
@@ -109,12 +109,9 @@ class ScheduleBuilder:
         ]
 
         # Get occupied timeblocks
-        time_blocks = get_schedule_time_blocks(self.schedule)
+        time_blocks = get_schedule_time_blocks(self.schedule) + get_time_blocks(preference.end_of_work_day, preference.start_of_work_day)
 
-        # Define session durations
-        session_durations = [3600, 3600, 3600, 3600]
-
-        # Get best focus times
+        # Get best focus times and preferred break length
         best_focus_times = []
         preferred_break_length = 0
         if (preference != None):
@@ -123,7 +120,12 @@ class ScheduleBuilder:
                 best_focus_times += get_time_blocks(preferred_time_interval.start_time, preferred_time_interval.end_time)
 
         # Get work sessions
-        self.schedule.schedule_items += schedule_work_sessions(time_blocks, self.schedule.id, session_durations, best_focus_times, preferred_break_length)
+        self.schedule.schedule_items += schedule_daily_items(
+            time_blocks,
+            [("Work session", 3600, ScheduleItemTypeEnum.FOCUS_SESSION) for i in range(4)],
+            [best_focus_times for i in range(4)],
+            preferred_break_length
+        )
 
         self.schedule.requires_work_refresh = False
 
