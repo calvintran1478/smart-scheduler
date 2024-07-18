@@ -2,6 +2,7 @@ from models.user import User
 from models.schedule import Schedule
 from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
 from models.preference import Preference
+from domain.users.preferences.repositories import PreferenceRepository
 from domain.users.events.repositories import EventRepository
 from lib.time import convert_to_utc
 from lib.constraint import TimeBlock, schedule_daily_items
@@ -135,10 +136,15 @@ class ScheduleDirector:
         self,
         builder: ScheduleBuilder,
         user: User,
-        preference: Preference,
+        preferences_repo: PreferenceRepository,
         events_repo: EventRepository,
         timezone_format: timezone
     ) -> None:
+        # Fetch preferences if needed
+        preference = None
+        if (builder.schedule.requires_sleep_refresh or builder.schedule.requires_work_refresh):
+            preference = await preferences_repo.get_one_or_none(user_id = user.id)
+
         # Schedule sleep hours
         if (builder.schedule.requires_sleep_refresh):
             builder.schedule_sleep_hours(preference)

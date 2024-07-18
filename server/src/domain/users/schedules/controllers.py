@@ -43,14 +43,10 @@ class ScheduleController(Controller):
         if (not created and not requires_refresh(schedule)):
             return schedule
 
-        # Initialize variables
-        preferences = await preferences_repo.get_one_or_none(user_id = user.id)
-        timezone_format = check_timezone(timezone)
-
         # Generate schedule
         scheduler_builder = ScheduleBuilder(schedule)
         schedule_director = ScheduleDirector()
-        await schedule_director.generate_schedule(scheduler_builder, user, preferences, events_repo, timezone_format)
+        await schedule_director.generate_schedule(scheduler_builder, user, preferences_repo, events_repo, check_timezone(timezone))
 
         # Save schedule items
         await schedules_repo.update(schedule, auto_commit=True)
