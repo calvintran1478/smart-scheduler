@@ -93,6 +93,10 @@ export default defineComponent({
       // TODO: reset password interface
     },
   },
+  onMounted() {
+    this.email = '';
+    this.password = '';
+  }
 });
 </script>
 

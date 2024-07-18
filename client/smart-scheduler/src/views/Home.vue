@@ -47,6 +47,14 @@
             </ion-col>
           </ion-row>
         </ion-grid>
+        <ion-button
+          fill="solid"
+          class="logout"
+          @click="logout"
+          size="large"
+          color="danger"
+          >Logout
+        </ion-button>
       </div>
     </ion-content>
   </ion-page>
@@ -93,6 +101,14 @@ export default defineComponent({
       settingsOutline,
       analyticsOutline
     };
+  },
+  methods: {
+    logout() {
+      localStorage.removeItem('token');
+      this.email = '';
+      this.password = '';
+      this.$router.push('/');
+    }
   }
 });
 </script>
@@ -133,5 +149,8 @@ export default defineComponent({
   margin-top: 10px;
   font-size: 16px;
   color: #fff;
+}
+.logout {
+  margin-top: 10px;
 }
 </style>
