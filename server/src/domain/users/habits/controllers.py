@@ -6,17 +6,25 @@ from litestar.di import Provide
 from models.user import User
 from models.habit import Habit, TimePrefererenceEnum
 from models.habit_completion import HabitCompletion
+from models.schedule_item import ScheduleItemTypeEnum
 from domain.users.habits.repositories import HabitRepository, HabitCompletionRepository
 from domain.users.habits.dependencies import provide_habits_repo, provide_habit_completions_repo, provide_habit
 from domain.users.habits.schemas import CreateHabitInput, UpdateHabitInput, CompleteHabitInput
 from domain.users.habits.dtos import HabitDTO, HabitCompletionDTO
 from domain.users.habits.hooks import after_habit_get_request
+from domain.users.schedules.repositories import ScheduleRepository
+from domain.users.schedules.dependencies import provide_schedules_repo
 
 class HabitController(Controller):
-    dependencies = {"habits_repo": Provide(provide_habits_repo), "habit_completions_repo": Provide(provide_habit_completions_repo), "habit": Provide(provide_habit)}
+    dependencies = {
+        "habits_repo": Provide(provide_habits_repo),
+        "habit_completions_repo": Provide(provide_habit_completions_repo),
+        "schedules_repo": Provide(provide_schedules_repo),
+        "habit": Provide(provide_habit)
+    }
 
     @post(path="/", return_dto=HabitDTO)
-    async def create_habit(self, data: CreateHabitInput, user: User, habits_repo: HabitRepository) -> Habit:
+    async def create_habit(self, data: CreateHabitInput, user: User, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> Habit:
         # Check if habit with name already exists
         habit_exists = await habits_repo.exists(user_id=user.id, name=data.name)
         if habit_exists:
@@ -35,7 +43,10 @@ class HabitController(Controller):
             night_preferred=TimePrefererenceEnum.NIGHT in data.time_preference
         )
 
-        await habits_repo.add(habit, auto_commit=True)
+        await habits_repo.add(habit, auto_commit=True, auto_expunge=True)
+
+        # Mark schedules for refresh
+        await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
 
         return habit
 
@@ -44,7 +55,7 @@ class HabitController(Controller):
         return await habits_repo.list(user_id = user.id)
 
     @patch(path="/{habit_name:str}", status_code=HTTP_204_NO_CONTENT)
-    async def update_habit(self, data: UpdateHabitInput, user: User, habit: Habit, habits_repo: HabitRepository) -> None:
+    async def update_habit(self, data: UpdateHabitInput, user: User, habit: Habit, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> None:
         # Check if any habits have the same name as the updated value
         if (data.name != None and data.name != habit.name):
             habit_exists = await habits_repo.exists(user_id=user.id, name=data.name)
@@ -64,6 +75,9 @@ class HabitController(Controller):
                 setattr(habit, attribute_name, attribute_value)
 
         await habits_repo.update(habit, auto_commit=True)
+
+        # Mark schedules for refresh
+        await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
 
     @delete(path="/{habit_name:str}")
     async def remove_habit(self, habit: Habit, habits_repo: HabitRepository) -> None:
