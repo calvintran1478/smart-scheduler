@@ -19,5 +19,5 @@ def get_time_difference(start_time: time, end_time: time) -> int:
     start = start_time.hour * 3600 + start_time.minute * 60 + start_time.second
     end = end_time.hour * 3600 + end_time.minute * 60 + end_time.second
     if (end_time < start_time):
-        end += 86400 - start
+        end += 86400
     return end - start
