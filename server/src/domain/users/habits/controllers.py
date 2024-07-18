@@ -4,7 +4,7 @@ from litestar.exceptions import ClientException
 from litestar.di import Provide
 
 from models.user import User
-from models.habit import Habit
+from models.habit import Habit, TimePrefererenceEnum
 from models.habit_completion import HabitCompletion
 from domain.users.habits.repositories import HabitRepository, HabitCompletionRepository
 from domain.users.habits.dependencies import provide_habits_repo, provide_habit_completions_repo, provide_habit
@@ -28,7 +28,11 @@ class HabitController(Controller):
             name=data.name,
             frequency=data.frequency,
             duration=data.duration,
-            repeat_interval=data.repeat_interval
+            repeat_interval=data.repeat_interval,
+            morning_preferred=TimePrefererenceEnum.MORNING in data.time_preference,
+            afternoon_preferred=TimePrefererenceEnum.AFTERNOON in data.time_preference,
+            evening_preferred=TimePrefererenceEnum.EVENING in data.time_preference,
+            night_preferred=TimePrefererenceEnum.NIGHT in data.time_preference
         )
 
         await habits_repo.add(habit, auto_commit=True)
@@ -47,9 +51,16 @@ class HabitController(Controller):
             if habit_exists:
                 raise ClientException(detail="Habit with the given name already exists", status_code=HTTP_409_CONFLICT)
 
+        # Update time preferences
+        if (data.time_preference != None):
+            habit.morning_preferred = TimePrefererenceEnum.MORNING in data.time_preference
+            habit.afternoon_preferred = TimePrefererenceEnum.AFTERNOON in data.time_preference
+            habit.evening_preferred = TimePrefererenceEnum.EVENING in data.time_preference
+            habit.night_preferred = TimePrefererenceEnum.NIGHT in data.time_preference
+
         # Update habit
         for attribute_name, attribute_value in data.__dict__.items():
-            if attribute_value != None:
+            if attribute_value != None and attribute_name != "time_preference":
                 setattr(habit, attribute_name, attribute_value)
 
         await habits_repo.update(habit, auto_commit=True)
