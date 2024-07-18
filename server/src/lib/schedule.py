@@ -2,11 +2,20 @@ from models.user import User
 from models.schedule import Schedule
 from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
 from models.preference import Preference
+from models.habit import Habit, RepeatIntervalEnum
+from domain.users.preferences.repositories import PreferenceRepository
 from domain.users.events.repositories import EventRepository
+from domain.users.habits.repositories import HabitRepository
 from lib.time import convert_to_utc
 from lib.constraint import TimeBlock, schedule_daily_items
 from datetime import time, datetime, timedelta
 from pytz import timezone
+
+# Time preference constants
+MORNING = [(6 * 3600, 12 * 3600)]                   # 6am - 12pm
+AFTERNOON = [(12 * 3600, 18 * 3600)]                # 12pm - 6pm
+EVENING = [(18 * 3600, 21 * 3600)]                  # 6pm - 9pm
+NIGHT = [(21 * 3600, 24 * 3600), (0, 6 * 3600)]     # 9pm - 6am
 
 def get_time_blocks(start_time: time, end_time: time) -> list[TimeBlock]:
     # Get second timestamps of each time object from the start of the day
@@ -76,7 +85,7 @@ class ScheduleBuilder:
 
         self.schedule.requires_sleep_refresh = False
 
-    async def schedule_events(self, user, events_repo: EventRepository, timezone_format: timezone) -> None:
+    async def schedule_events(self, user: User, events_repo: EventRepository, timezone_format: timezone) -> None:
         # Remove previous event items
         self.schedule.schedule_items = [
             schedule_item for schedule_item in self.schedule.schedule_items
@@ -98,7 +107,42 @@ class ScheduleBuilder:
 
         self.schedule.requires_event_refresh = False
 
-    def schedule_habits(self) -> None:
+    async def schedule_habits(self, user: User, habits_repo: HabitRepository) -> None:
+        """Only schedules daily habits"""
+        # Remove previous habit sessions
+        self.schedule.schedule_items = [
+            schedule_item for schedule_item in self.schedule.schedule_items
+            if schedule_item.schedule_item_type != ScheduleItemTypeEnum.HABIT
+        ]
+
+        # Get occupied timeblocks
+        time_blocks = get_schedule_time_blocks(self.schedule)
+
+        # Get habits
+        habits = await habits_repo.list(user_id = user.id, repeat_interval = RepeatIntervalEnum.DAILY)
+
+        # Preferred break length
+        preferred_spacing = 3600 # Default one hour spacing for now
+
+        # Get preferred times
+        preferred_times = []
+        for habit in habits:
+            curr_preferred_times = []
+            curr_preferred_times += MORNING if habit.morning_preferred else []
+            curr_preferred_times += AFTERNOON if habit.afternoon_preferred else []
+            curr_preferred_times += EVENING if habit.evening_preferred else []
+            curr_preferred_times += NIGHT if habit.night_preferred else []
+
+            preferred_times.append(curr_preferred_times)
+
+        # Get habit sessions
+        self.schedule.schedule_items += schedule_daily_items(
+            time_blocks,
+            [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT) for habit in habits],
+            preferred_times,
+            preferred_spacing
+        )
+
         self.schedule.requires_habit_refresh = False
 
     def schedule_work_sessions(self, preference: Preference) -> None:
@@ -135,10 +179,16 @@ class ScheduleDirector:
         self,
         builder: ScheduleBuilder,
         user: User,
-        preference: Preference,
+        preferences_repo: PreferenceRepository,
         events_repo: EventRepository,
+        habits_repo: HabitRepository,
         timezone_format: timezone
     ) -> None:
+        # Fetch preferences if needed
+        preference = None
+        if (builder.schedule.requires_sleep_refresh or builder.schedule.requires_work_refresh):
+            preference = await preferences_repo.get_one_or_none(user_id = user.id)
+
         # Schedule sleep hours
         if (builder.schedule.requires_sleep_refresh):
             builder.schedule_sleep_hours(preference)
@@ -149,7 +199,7 @@ class ScheduleDirector:
 
         # Schedule habits
         if (builder.schedule.requires_habit_refresh):
-            builder.schedule_habits()
+            await builder.schedule_habits(user, habits_repo)
 
         # Schedule work sessions
         if (builder.schedule.requires_work_refresh):

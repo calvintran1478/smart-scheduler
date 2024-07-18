@@ -15,6 +15,8 @@ from domain.users.preferences.dependencies import provide_preferences_repo
 from domain.users.events.repositories import EventRepository
 from domain.users.events.dependencies import provide_events_repo
 from domain.users.events.validators import check_timezone
+from domain.users.habits.repositories import HabitRepository
+from domain.users.habits.dependencies import provide_habits_repo
 from lib.time import convert_to_utc, seconds_to_time_object
 from lib.schedule import requires_refresh, ScheduleBuilder, ScheduleDirector
 
@@ -25,7 +27,8 @@ class ScheduleController(Controller):
     dependencies = {
         "schedules_repo": Provide(provide_schedules_repo),
         "preferences_repo": Provide(provide_preferences_repo),
-        "events_repo": Provide(provide_events_repo)
+        "events_repo": Provide(provide_events_repo),
+        "habits_repo": Provide(provide_habits_repo)
     }
 
     @get(path="/{schedule_date:date}", return_dto=ScheduleDTO)
@@ -36,6 +39,7 @@ class ScheduleController(Controller):
         schedules_repo: ScheduleRepository,
         preferences_repo: PreferenceRepository,
         events_repo: EventRepository,
+        habits_repo: HabitRepository,
         timezone: str
     ) -> Schedule:
         # Fetch schedule if already generated and does not require refresh
@@ -43,14 +47,10 @@ class ScheduleController(Controller):
         if (not created and not requires_refresh(schedule)):
             return schedule
 
-        # Initialize variables
-        preferences = await preferences_repo.get_one_or_none(user_id = user.id)
-        timezone_format = check_timezone(timezone)
-
         # Generate schedule
         scheduler_builder = ScheduleBuilder(schedule)
         schedule_director = ScheduleDirector()
-        await schedule_director.generate_schedule(scheduler_builder, user, preferences, events_repo, timezone_format)
+        await schedule_director.generate_schedule(scheduler_builder, user, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
 
         # Save schedule items
         await schedules_repo.update(schedule, auto_commit=True)

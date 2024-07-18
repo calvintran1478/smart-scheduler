@@ -27,11 +27,13 @@ class TimeVariable:
     name: str
     duration: int # in multiples of 15 minutes
     schedule_item_type: ScheduleItemTypeEnum
+    num_preferred_intervals_available: int
 
-    def __init__(self, name: str, duration: int, schedule_item_type: ScheduleItemTypeEnum) -> None:
+    def __init__(self, name: str, duration: int, schedule_item_type: ScheduleItemTypeEnum, num_preferred_intervals_available: int = 0) -> None:
         self.name = name
         self.duration = duration
         self.schedule_item_type = schedule_item_type
+        self.num_preferred_intervals_available = num_preferred_intervals_available
 
 class ConstraintSatisfactionProblem:
     variable_domains: dict[TimeVariable, Domain]
@@ -71,7 +73,7 @@ def forward_check(csp: ConstraintSatisfactionProblem, assignment: PartialSolutio
         csp.variable_domains[unassigned_var] = (interval for interval in domain_lst)
 
 def backtracking_search(csp: ConstraintSatisfactionProblem, preferred_value_spacing: int) -> Optional[Solution]:
-    empty_solution = {k: None for k in sorted(csp.variable_domains.keys(), key=lambda var: var.duration, reverse=True)}
+    empty_solution = {k: None for k in sorted(csp.variable_domains.keys(), key=lambda var: (var.duration, -var.num_preferred_intervals_available), reverse=True)}
     return backtrack(csp, empty_solution, preferred_value_spacing)
 
 def backtrack(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, preferred_value_spacing: int) -> Optional[Solution]:
@@ -147,6 +149,7 @@ def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[DailyIt
                 try:
                     variable_domain_lst.remove(interval)
                     variable_domain_lst.insert(0, interval)
+                    time_variable.num_preferred_intervals_available += 1
                 except ValueError:
                     pass
         variable_domains[time_variable] = (x for x in variable_domain_lst)
