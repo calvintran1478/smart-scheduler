@@ -12,9 +12,7 @@
             <ion-input v-model="wake_up_time" type="time" required></ion-input>
           </div>
           <div class="form-group">
-            <ion-label position="floating"
-              >When do you usually sleep?</ion-label
-            >
+            <ion-label position="floating">When do you usually sleep?</ion-label>
             <ion-input v-model="sleep_time" type="time" required></ion-input>
           </div>
           <div class="form-group">
@@ -25,6 +23,14 @@
               <span>End </span>
               <ion-input v-model="best_focus_time_end" type="time" required></ion-input>
             </div>
+          </div>
+          <div class="form-group">
+            <ion-label position="floating">When do you start working?</ion-label>
+            <ion-input v-model="start_of_work_day" type="time" required></ion-input>
+          </div>
+          <div class="form-group">
+            <ion-label position="floating">When do you end working?</ion-label>
+            <ion-input v-model="end_of_work_day" type="time" required></ion-input>
           </div>
           <div class="form-group">
             <ion-label>How long of a break (in minutes) do you like to take between work sessions?</ion-label>
@@ -41,9 +47,7 @@
               <ion-select-option :value="false">No</ion-select-option>
             </ion-select>
           </div>
-          <ion-button expand="block" type="submit" class="custom_button"
-            >Continue</ion-button
-          >
+          <ion-button expand="block" type="submit" class="custom_button">Continue</ion-button>
         </form>
       </div>
     </ion-content>
@@ -58,21 +62,33 @@ import {
   IonItem,
   IonContent,
   IonPage,
-  IonSelect, 
+  IonSelect,
   IonSelectOption
 } from "@ionic/vue";
 import { defineComponent } from "vue";
+
 export default defineComponent({
-  components: { IonButton, IonLabel, IonInput, IonItem, IonContent, IonPage, IonSelect, IonSelectOption },
+  components: {
+    IonButton,
+    IonLabel,
+    IonInput,
+    IonItem,
+    IonContent,
+    IonPage,
+    IonSelect,
+    IonSelectOption
+  },
   data() {
     return {
       wake_up_time: "",
       sleep_time: "",
       best_focus_times: [""],
+      start_of_work_day: "",
+      end_of_work_day: "",
       break_length: "",
       tend_to_procrastinate: true,
-      best_focus_time_start: '', 
-    best_focus_time_end: '', 
+      best_focus_time_start: "",
+      best_focus_time_end: ""
     };
   },
   methods: {
@@ -82,20 +98,6 @@ export default defineComponent({
         console.error("No token found");
         return;
       }
-      console.log(token);
-      /*
-      const payload = JSON.stringify({
-              wake_up_time: this.wake_up_time + ':00',
-              sleep_time: this.sleep_time + ':00',
-              best_focus_times: [`${this.best_focus_time_start}:00 - ${this.best_focus_time_end}:00`],
-              break_length: this.break_length,
-              tend_to_procrastinate: this.tend_to_procrastinate,
-            })
-      
-      console.log(payload);
-      console.log(typeof(this.tend_to_procrastinate));
-      */
-      
       try {
         const response = await fetch(
           "http://localhost:8000/api/v1/users/preferences/",
@@ -103,30 +105,32 @@ export default defineComponent({
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
-              // add authorization
               "Authorization": `Bearer ${token}`
-              
             },
+            credentials: "include",
             body: JSON.stringify({
-              wake_up_time: this.wake_up_time + ':00',
-              sleep_time: this.sleep_time + ':00',
-              best_focus_times: [`${this.best_focus_time_start}:00 - ${this.best_focus_time_end}:00`],
+              wake_up_time: this.wake_up_time,
+              sleep_time: this.sleep_time,
+              start_of_work_day: this.start_of_work_day,
+              end_of_work_day: this.end_of_work_day,
+              best_focus_times: [`${this.best_focus_time_start} - ${this.best_focus_time_end}`],
               break_length: this.break_length,
               tend_to_procrastinate: this.tend_to_procrastinate,
-            }),
+            })
           }
         );
-        if (!response.ok) {
+        if (response.status === 201 || response.status === 204) {
+          console.log("Settings successful");
+          // Redirect to home page if successful
+          this.$router.push('/home');
+        } else {
           throw new Error("Settings failed");
         }
-        console.log("Settings successful");
-        // Redirect to home page if successful
-        this.$router.push('/home');
       } catch (error) {
         console.error("Error during settings:", error);
       }
-    },
-  },
+    }
+  }
 });
 </script>
 
@@ -151,6 +155,7 @@ ion-input {
 ion-button:hover {
   --background: #0056b3;
 }
+
 .welcome {
   padding-top: 30px;
   font-size: 28px;
@@ -173,7 +178,7 @@ ion-button:hover {
 }
 
 .time-range {
-  display: flex; 
+  display: flex;
   align-items: center;
 }
 </style>

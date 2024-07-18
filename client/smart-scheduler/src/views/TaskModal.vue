@@ -15,7 +15,26 @@
       </ion-item>
       <ion-item>
         <ion-label position="stacked">Due Date</ion-label>
-        <ion-datetime display-format="YYYY-MM-DD" v-model="date"></ion-datetime>
+        <ion-datetime display-format="YYYY-MM-DDTHH:mm:ss" v-model="dateTime"></ion-datetime>
+      </ion-item>
+      <ion-item>
+        <ion-label position="stacked">Time Estimate</ion-label>
+        <ion-item>
+          <ion-label>Hours</ion-label>
+          <ion-select v-model="timeEstimate.hours">
+            <ion-select-option v-for="hour in hours" :key="hour" :value="hour">
+              {{ hour }}
+            </ion-select-option>
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-label>Minutes</ion-label>
+          <ion-select v-model="timeEstimate.minutes">
+            <ion-select-option v-for="minute in minutes" :key="minute" :value="minute">
+              {{ minute }}
+            </ion-select-option>
+          </ion-select>
+        </ion-item>
       </ion-item>
       <ion-item>
         <ion-label position="stacked">Tag</ion-label>
@@ -115,7 +134,15 @@ export default defineComponent({
       creatingNewTag: false,
       newTagName: "",
       newTagColour: "",
+      timeEstimate: {
+        hours: "00",
+        minutes: "00",
+        seconds: "00",
+      },
       basicColours: ["red", "blue", "green", "yellow", "purple"],
+      hours: Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")),
+      minutes: Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
     };
   },
   methods: {
@@ -131,8 +158,10 @@ export default defineComponent({
       console.log(token);
       let task = {
         name: this.name,
-        deadline_date: this.date.split("T")[0],
-        deadline_time: this.time,
+        deadline_date: this.dateTime.split("T")[0],
+        deadline_time: this.dateTime.split("T")[1],
+        time_estimate: `${this.timeEstimate.hours}:${this.timeEstimate.minutes}:00`,
+        timezone: this.timezone,
       };
 
       if (this.selectedTag) {
@@ -150,8 +179,9 @@ export default defineComponent({
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
+                "Authorization": `Bearer ${token}`,
               },
+              credentials: "include",
               body: JSON.stringify(newTag),
             }
           );
@@ -178,6 +208,7 @@ export default defineComponent({
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
+            credentials: "include",
             body: JSON.stringify(task),
           }
         );
@@ -186,6 +217,7 @@ export default defineComponent({
           const newTask = await response.json();
           this.$emit("task-created", newTask);
           this.closeModal();
+          console.log("Create task successful.");
         } else {
           console.error("Failed to create task:", response.statusText);
         }
@@ -207,14 +239,16 @@ export default defineComponent({
             method: "GET",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
+              "Authorization": `Bearer ${token}`,
             },
+            credentials: "include",
           }
         );
 
         if (response.status === 200) {
           const data = await response.json();
           this.tags = data.tags;
+          console.log("Fetch tags successful");
         } else {
           console.error("Failed to fetch tags:", response.statusText);
         }

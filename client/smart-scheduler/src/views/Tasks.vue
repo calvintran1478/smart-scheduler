@@ -6,7 +6,7 @@
           <ion-item v-for="task in tasks" :key="task.task_id">
             <ion-label>
               <h2>{{ task.name }}</h2>
-              <p>Due: {{ task.deadline_date }} at {{ task.deadline_time }}</p>
+              <p>Due: {{ task.deadline.split('T')[0] }} at {{ task.deadline.split('T')[1] }}</p>
               <p v-if="task.tag">Tag: {{ task.tag.name }} <span :style="{color: task.tag.colour}">●</span></p>
             </ion-label>
           </ion-item>
@@ -55,7 +55,11 @@
       };
   
       const addTask = (task) => {
-        tasks.value.push(task);
+        if (Array.isArray(tasks.value)) {
+          tasks.value.push(task);
+        } else {
+          tasks.value = [task]; 
+        }
       };
   
       const fetchTasks = async () => {
@@ -65,23 +69,24 @@
           return;
         }
         console.log(token);
-        try {
-          const response = await fetch('http://localhost:8000/api/v1/users/tasks', {
+        const response = await fetch('http://localhost:8000/api/v1/users/tasks', {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
               "Authorization": `Bearer ${token}`
-            }
-          });
-          if (response.ok) {
-            const data = await response.json();
+            },
+            credentials: "include"
+          }).then((response) => {
+            if (response.ok) {
+            const data = response.json();
             tasks.value = data.tasks;
-          } else {
-            console.error('Failed to fetch tasks:', response.statusText);
+            console.log('Fetch tasks successful.')
+            console.log(tasks.value);
+            }
           }
-        } catch (error) {
-          console.error('Error fetching tasks:', error);
-        }
+          ).catch((err) => {
+            console.error('Failed to fetch tasks:', err);}
+          );
       };
   
       onMounted(() => {

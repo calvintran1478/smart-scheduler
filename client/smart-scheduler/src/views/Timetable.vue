@@ -52,7 +52,8 @@
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
-            }
+            },
+            credentials: "include"
             });
           if (response.status === 200) {
             const data = await response.json();

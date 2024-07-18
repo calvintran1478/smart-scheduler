@@ -57,12 +57,14 @@
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
-            }
+            },
+            credentials: "include"
           });
 
           if (response.status === 200) {
             const data = await response.json();
             this.habits = data.habits;
+            console.log("Fetch habits successful.");
           } else {
             console.error('Failed to fetch habits:', response.statusText);
           }

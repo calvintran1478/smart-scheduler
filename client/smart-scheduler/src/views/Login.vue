@@ -65,6 +65,7 @@ export default defineComponent({
           headers: {
             "Content-Type": "application/json",
           },
+          credentials: "include",
           body: JSON.stringify({
             email: this.email,
             password: this.password,
