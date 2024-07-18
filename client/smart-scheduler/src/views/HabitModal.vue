@@ -18,12 +18,25 @@
           <ion-input v-model.number="frequency" type="number" min="1" placeholder="Enter frequency"></ion-input>
         </ion-item>
         <ion-item>
+          <ion-label position="stacked">Duration (in minutes)</ion-label>
+          <ion-input v-model.number="duration" type="number" min="1" aria-placeholder="Enter duration"></ion-input>
+        </ion-item>
+        <ion-item>
           <ion-label position="stacked">Repeat Interval</ion-label>
           <ion-select v-model="repeat_interval" placeholder="Select repeat interval">
             <ion-select-option value="Daily">Daily</ion-select-option>
             <ion-select-option value="Weekly">Weekly</ion-select-option>
             <ion-select-option value="Monthly">Monthly</ion-select-option>
             <ion-select-option value="Yearly">Yearly</ion-select-option>
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-label position="stacked">Time Preference</ion-label>
+          <ion-select v-model="time_preference" multiple placeholder="Select time preference">
+            <ion-select-option value="Daily">Morning</ion-select-option>
+            <ion-select-option value="Weekly">Afternoon</ion-select-option>
+            <ion-select-option value="Monthly">Evening</ion-select-option>
+            <ion-select-option value="Yearly">Night</ion-select-option>
           </ion-select>
         </ion-item>
         <ion-button expand="block" @click="createHabit">Create Habit</ion-button>
@@ -54,7 +67,9 @@
       return {
         name: '',
         frequency: 1,
-        repeat_interval: 'Daily'
+        repeat_interval: 'Daily',
+        duration: 1,
+        time_preference: []
       };
     },
     methods: {
@@ -65,15 +80,24 @@
         const habit = {
           name: this.name,
           frequency: this.frequency,
-          repeat_interval: this.repeat_interval
+          repeat_interval: this.repeat_interval,
+          duration: this.duration,
+          time_preference: this.time_preference
         };
+        const token = localStorage.getItem("token");
+        if (!token) {
+            console.error("No token found");
+            return;
+        }
   
         try {
           const response = await fetch('http://localhost:8000/api/v1/users/habits', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
             },
+            credentials: "include",
             body: JSON.stringify(habit)
           });
   
@@ -81,6 +105,7 @@
             const newHabit = await response.json();
             this.$emit('habit-created', newHabit);
             this.closeModal();
+            console.log('Create task sucessful.')
           } else {
             console.error('Failed to create habit:', response.statusText);
           }
