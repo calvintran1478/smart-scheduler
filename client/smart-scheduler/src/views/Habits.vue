@@ -8,6 +8,7 @@
               <h2>{{ habit.name }}</h2>
               <p>{{ habit.frequency }} times {{ habit.repeat_interval.toLowerCase() }}</p>
             </ion-label>
+            <ion-button slot="end" @click="editHabit(habit)">Edit</ion-button>
           </ion-item>
         </ion-list>
         <ion-fab vertical="bottom" horizontal="end" slot="fixed">
@@ -16,6 +17,12 @@
           </ion-fab-button>
         </ion-fab>
         <habit-modal v-if="isModalOpen" @close="closeModal" @habit-created="addHabit" />
+        <habit-edit-modal
+          v-if="isEditModalOpen"
+          :habit="selectedHabit"
+          @close="closeEditModal"
+          @habit-updated="updateHabit"
+      />
       </ion-content>
     </ion-page>
   </template>
@@ -25,6 +32,7 @@
   import { addOutline } from "ionicons/icons";
   import HabitModal from './HabitModal.vue';
   import { defineComponent } from "vue";
+  import HabitEditModal from './HabitUpdateModal.vue';
   
   export default defineComponent({
     components: {
@@ -36,13 +44,16 @@
       IonFab,
       IonFabButton,
       IonIcon,
-      HabitModal
+      HabitModal,
+      HabitEditModal
     },
     data() {
       return {
         habits: [],
         isModalOpen: false,
-        addOutline: addOutline
+        addOutline: addOutline,
+        isEditModalOpen: false,
+        selectedHabit: null,
       };
     },
     methods: {
@@ -80,6 +91,14 @@
       },
       addHabit(newHabit) {
         this.habits.push(newHabit);
+      },
+      async editHabit(habit) {
+        await this.fetchHabits();
+        this.isEditModalOpen = true;
+        this.selectedHabit = habit;
+      },
+      closeEditModal() {
+        this.isEditModalOpen = false;
       }
     },
     mounted() {
