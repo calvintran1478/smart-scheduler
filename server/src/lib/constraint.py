@@ -16,7 +16,7 @@ FAILURE = "FAILURE"
 # Type definitions
 type DailyItem = tuple[str, int, ScheduleItemTypeEnum]
 type TimeBlock = tuple[float, float]
-type Domain = Generator[int, None, None]
+type Domain = list[int]
 type Relation = callable[[dict[TimeVariable, int]], bool]
 type Constraint = tuple[list[TimeVariable], Relation]
 type PartialSolution = dict[TimeVariable, int | None]
@@ -46,18 +46,17 @@ class ConstraintSatisfactionProblem:
 def forward_check(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, assigned_var: TimeVariable, value: int, preferred_value_spacing: int) -> Failure | None:
     """Remove domain values which are inconsistent with the given assignment. If a domain becomes empty in this process a failure is returned"""
     # Determine interval numbers directly blocked by assignment
-    intervals_occupied = list(range(value, value + assigned_var.duration))
+    intervals_occupied = range(value, value + assigned_var.duration)
 
     # Reduce unassigned variable domains based on new assignment
     unassigned_variables = (var for var in assignment.keys() if assignment[var] == None)
     for unassigned_var in unassigned_variables:
         # Calculate new domain
-        csp.variable_domains[unassigned_var] = (interval for interval in csp.variable_domains[unassigned_var] if interval not in intervals_occupied)
-        csp.variable_domains[unassigned_var] = (interval for interval in csp.variable_domains[unassigned_var] if interval not in range(value - unassigned_var.duration + 1, value))
+        csp.variable_domains[unassigned_var] = [interval for interval in csp.variable_domains[unassigned_var] if interval not in intervals_occupied]
+        csp.variable_domains[unassigned_var] = [interval for interval in csp.variable_domains[unassigned_var] if interval not in range(value - unassigned_var.duration + 1, value)]
 
         # Check if domain is empty
-        domain_lst = list(csp.variable_domains[unassigned_var])
-        if (len(domain_lst) == 0):
+        if (len(csp.variable_domains[unassigned_var]) == 0):
             return FAILURE
 
         # Prioritize values away from the new assignment based on the preferred spacing
@@ -66,11 +65,10 @@ def forward_check(csp: ConstraintSatisfactionProblem, assignment: PartialSolutio
         intervals_to_shift = chain(range(first_interval - preferred_value_spacing, first_interval), range(last_interval + 1, last_interval + 1 + preferred_value_spacing))
         for interval in intervals_to_shift:
             try:
-                domain_lst.remove(interval)
-                domain_lst.append(interval)
+                csp.variable_domains[unassigned_var].remove(interval)
+                csp.variable_domains[unassigned_var].append(interval)
             except ValueError:
                 pass
-        csp.variable_domains[unassigned_var] = (interval for interval in domain_lst)
 
 def backtracking_search(csp: ConstraintSatisfactionProblem, preferred_value_spacing: int) -> Optional[Solution]:
     empty_solution = {k: None for k in sorted(csp.variable_domains.keys(), key=lambda var: (var.duration, -var.num_preferred_intervals_available), reverse=True)}
@@ -85,9 +83,7 @@ def backtrack(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, p
     curr_var = next(var for var in assignment.keys() if assignment[var] == None)
 
     # Save a copy of the domains to revert back to
-    original_variable_domains = {k: list(v) for k, v in csp.variable_domains.items() if assignment[k] == None and k != curr_var}
-    for k, v in original_variable_domains.items():
-        csp.variable_domains[k] = (x for x in v)
+    original_variable_domains = {k: tuple(v) for k, v in csp.variable_domains.items() if assignment[k] == None and k != curr_var}
 
     # Search for a valid assignment for the selected variable
     for value in csp.variable_domains[curr_var]:
@@ -106,7 +102,7 @@ def backtrack(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, p
         # Otherwise recover original domains to try a new variable assignment
         assignment[curr_var] = None
         for k, v in original_variable_domains.items():
-            csp.variable_domains[k] = (x for x in v)
+            csp.variable_domains[k] = list(v)
 
 def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[DailyItem], preferred_times: list[list[TimeBlock]], preferred_spacing: int) -> list[ScheduleItem]:
     # Initialize starting domain
@@ -122,37 +118,34 @@ def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[DailyIt
         interval_numbers = range(first_interval, int(last_interval) + 1)
 
         # Reduce domain
-        domain = (x for x in domain if x not in interval_numbers)
+        domain = tuple(x for x in domain if x not in interval_numbers)
 
         # Track start intervals for variable specific domain reductions
         start_intervals.append(first_interval)
 
     # Create time variables
-    time_variables = [TimeVariable(name, ceil(duration / seconds_per_interval), schedule_item_type) for name, duration, schedule_item_type in daily_items]
+    time_variables = tuple(TimeVariable(name, ceil(duration / seconds_per_interval), schedule_item_type) for name, duration, schedule_item_type in daily_items)
 
     # Determine domain for each variable
-    domain_lst = list(domain)
     variable_domains = {}
     for i, time_variable in enumerate(time_variables):
         # Reduce domain to viable values
-        variable_domains[time_variable] = (x for x in domain_lst if x not in range(num_intervals - time_variable.duration + 1, num_intervals))
+        variable_domains[time_variable] = tuple(x for x in domain if x not in range(num_intervals - time_variable.duration + 1, num_intervals))
         for start_interval in start_intervals:
-            variable_domains[time_variable] = (x for x in variable_domains[time_variable] if x not in range(start_interval - time_variable.duration + 1, start_interval))
+            variable_domains[time_variable] = [x for x in variable_domains[time_variable] if x not in range(start_interval - time_variable.duration + 1, start_interval)]
 
         # Prioritize values
-        variable_domain_lst = list(variable_domains[time_variable])
         for preferred_time_interval in preferred_times[i]:
             first_preferred_interval = floor(preferred_time_interval[0] / seconds_per_interval)
             result = preferred_time_interval[1] / seconds_per_interval
             last_preferred_interval = result - 1 if result.is_integer() else floor(result)
             for interval in range(int(last_preferred_interval), first_preferred_interval - 1, -1):
                 try:
-                    variable_domain_lst.remove(interval)
-                    variable_domain_lst.insert(0, interval)
+                    variable_domains[time_variable].remove(interval)
+                    variable_domains[time_variable].insert(0, interval)
                     time_variable.num_preferred_intervals_available += 1
                 except ValueError:
                     pass
-        variable_domains[time_variable] = (x for x in variable_domain_lst)
 
     # Solve constraint satisfaction problem to produce a schedule for the given daily items
     csp = ConstraintSatisfactionProblem(variable_domains, [])
