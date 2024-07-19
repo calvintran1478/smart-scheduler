@@ -12,7 +12,6 @@ class SetPreferencesInput(BaseModel):
     end_of_work_day: time
     best_focus_times: FocusTimes
     break_length: NonNegativeInt
-    tend_to_procrastinate: bool
 
     @model_validator(mode="after")
     def validate_preferences(self) -> Self:

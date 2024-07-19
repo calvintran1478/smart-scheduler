@@ -35,8 +35,7 @@ class PreferenceController(Controller):
             sleep_time = data.sleep_time,
             start_of_work_day = data.start_of_work_day,
             end_of_work_day = data.end_of_work_day,
-            break_length = data.break_length,
-            tend_to_procrastinate = data.tend_to_procrastinate
+            break_length = data.break_length
         )
 
         # Set new preferred focus times
@@ -94,7 +93,6 @@ class PreferenceController(Controller):
                 "start_of_work_day": data.start_of_work_day,
                 "end_of_work_day": data.end_of_work_day,
                 "break_length": data.break_length,
-                "tend_to_procrastinate": data.tend_to_procrastinate,
                 "best_focus_times": data.best_focus_times
             }
             return Response(content=preference_representation, status_code=HTTP_201_CREATED)

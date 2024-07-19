@@ -14,7 +14,6 @@ class Preference(UUIDBase):
     start_of_work_day: Mapped[Optional[time]]
     end_of_work_day: Mapped[Optional[time]]
     break_length: Mapped[Optional[int]] = mapped_column(CheckConstraint("break_length >= 0", name="break_length_gte_0"))
-    tend_to_procrastinate: Mapped[Optional[bool]]
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", onupdate="CASCADE"))
 
     best_focus_times: Mapped[list["PreferredTimeInterval"]] = relationship(back_populates="preference", lazy="selectin", passive_deletes=True, cascade="all, delete-orphan")
