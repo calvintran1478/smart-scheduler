@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 from math import floor, ceil
 from typing import Optional, Literal, Generator
 from uuid import UUID
@@ -11,10 +11,12 @@ from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
 from lib.time import seconds_to_time_object
 
 # Constants
+SECONDS_PER_DAY = 86400
+DAYS_PER_WEEK = 7
 FAILURE = "FAILURE"
 
 # Type definitions
-type DailyItem = tuple[str, int, ScheduleItemTypeEnum]
+type ScheduleItemDetails = tuple[str, int, ScheduleItemTypeEnum] # name, duration (in seconds), schedule item type
 type TimeBlock = tuple[float, float]
 type Domain = list[int]
 type Relation = callable[[dict[TimeVariable, int]], bool]
@@ -104,7 +106,7 @@ def backtrack(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, p
         for k, v in original_variable_domains.items():
             csp.variable_domains[k] = list(v)
 
-def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[DailyItem], preferred_times: list[list[TimeBlock]], preferred_spacing: int) -> list[ScheduleItem]:
+def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[ScheduleItemDetails], preferred_times: list[list[TimeBlock]], preferred_spacing: int) -> list[ScheduleItem]:    
     # Initialize starting domain
     seconds_per_interval = 60 * 15
     num_intervals = floor(86400 / seconds_per_interval)
@@ -130,7 +132,7 @@ def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[DailyIt
     variable_domains = {}
     for i, time_variable in enumerate(time_variables):
         # Reduce domain to viable values
-        variable_domains[time_variable] = tuple(x for x in domain if x not in range(num_intervals - time_variable.duration + 1, num_intervals))
+        variable_domains[time_variable] = [x for x in domain if x not in range(num_intervals - time_variable.duration + 1, num_intervals)]
         for start_interval in start_intervals:
             variable_domains[time_variable] = [x for x in variable_domains[time_variable] if x not in range(start_interval - time_variable.duration + 1, start_interval)]
 
@@ -160,3 +162,108 @@ def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[DailyIt
         ) for time_variable, start_interval in solution.items()]
     else:
         raise ClientException(detail="Could not find time slots for daily items", status_code=HTTP_409_CONFLICT)
+
+def schedule_weekly_items(time_blocks: list[TimeBlock], weekly_items: list[ScheduleItemDetails], preferred_times: list[list[TimeBlock]], preferred_spacing: int) -> list[list[ScheduleItem]]:
+    # Initialize starting domain
+    seconds_per_interval = 60 * 15
+    num_intervals = floor(SECONDS_PER_DAY * DAYS_PER_WEEK / seconds_per_interval)
+    domain = range(num_intervals)
+    start_intervals = []
+    for time_block in time_blocks:
+        # Get interval numbers that overlap with the time block
+        first_interval = floor(time_block[0] / seconds_per_interval)
+        result = time_block[1] / seconds_per_interval
+        last_interval = result - 1 if result.is_integer() else floor(result)
+        interval_numbers = range(first_interval, int(last_interval) + 1)
+
+        # Reduce domain
+        domain = tuple(x for x in domain if x not in interval_numbers)
+
+        # Track start intervals for variable specific domain reductions
+        start_intervals.append(first_interval)
+
+    # Create time variables
+    time_variables = tuple(TimeVariable(name, ceil(duration / seconds_per_interval), schedule_item_type) for name, duration, schedule_item_type in weekly_items)
+
+    # Determine domain for each variable
+    variable_domains = {}
+    for i, time_variable in enumerate(time_variables):
+        # Reduce domain to viable values
+        variable_domains[time_variable] = [x for x in domain if x not in range(num_intervals - time_variable.duration + 1, num_intervals)]
+        for start_interval in start_intervals:
+            variable_domains[time_variable] = [x for x in variable_domains[time_variable] if x not in range(start_interval - time_variable.duration + 1, start_interval)]
+
+        # Prioritize values
+        for preferred_time_interval in preferred_times[i]:
+            first_preferred_interval = floor(preferred_time_interval[0] / seconds_per_interval)
+            result = preferred_time_interval[1] / seconds_per_interval
+            last_preferred_interval = result - 1 if result.is_integer() else floor(result)
+            for interval in range(int(last_preferred_interval), first_preferred_interval - 1, -1):
+                try:
+                    variable_domains[time_variable].remove(interval)
+                    variable_domains[time_variable].insert(0, interval)
+                    time_variable.num_preferred_intervals_available += 1
+                except ValueError:
+                    pass
+
+    # Solve constraint satisfaction problem to produce a schedule for the given weekly items
+    csp = ConstraintSatisfactionProblem(variable_domains, [])
+    preferred_value_spacing = ceil(preferred_spacing / seconds_per_interval)
+    solution = backtracking_search(csp, preferred_value_spacing)
+    if (solution != None):
+        schedule_items = [[] for _ in range(DAYS_PER_WEEK)]
+        for time_variable, start_interval in solution.items():
+            # Second offset of schedule item from start of the first day
+            start = start_interval * seconds_per_interval
+            end = (start_interval + time_variable.duration) * seconds_per_interval
+
+            # Start and end days of the schedule item
+            start_day = floor(start / SECONDS_PER_DAY)
+            end_day = floor(end / SECONDS_PER_DAY)
+
+            # Second offset of the schedule item from its respective start and end days
+            start_day_offset = start % SECONDS_PER_DAY
+            end_day_offset = end % SECONDS_PER_DAY
+
+            # Schedule item is contained within a single day
+            if (start_day == end_day):
+                schedule_items[start_day].append(ScheduleItem(
+                    name=time_variable.name,
+                    start_time=seconds_to_time_object(start_day_offset),
+                    end_time=seconds_to_time_object(end_day_offset),
+                    schedule_item_type=time_variable.schedule_item_type
+                ))
+
+            # Schedule item occurs over multiple days
+            elif (start_day < end_day):
+                # First day
+                schedule_items[start_day].append(ScheduleItem(
+                    name=time_variable.name,
+                    start_time=seconds_to_time_object(start_offset),
+                    end_time=seconds_to_time_object(SECONDS_PER_DAY),
+                    schedule_item_type=time_variable.schedule_item_type
+                ))
+
+                # Middle days
+                day = start_day + 1
+                while (day < end_day):
+                    schedule_items[day].append(ScheduleItem(
+                        name=time_variable.name,
+                        start_time=time(),
+                        end_time=seconds_to_time_object(SECONDS_PER_DAY),
+                        schedule_item_type=time_variable.schedule_item_type
+                    ))
+                    day += 1
+
+                # Last day
+                if (end_offset != 0):
+                    schedule_items[end_day].append(ScheduleItem(
+                        name=time_variable.name,
+                        start_time=time(),
+                        end_time=seconds_to_time_object(end_offset),
+                        schedule_item_type=time_variable.schedule_item_type
+                    ))
+
+        return schedule_items
+    else:
+        raise ClientException(detail="Could not find time slots for weekly items", status_code=HTTP_409_CONFLICT)

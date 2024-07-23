@@ -18,7 +18,7 @@ from domain.users.events.validators import check_timezone
 from domain.users.habits.repositories import HabitRepository
 from domain.users.habits.dependencies import provide_habits_repo
 from lib.time import convert_to_utc, seconds_to_time_object
-from lib.schedule import requires_refresh, ScheduleBuilder, ScheduleDirector
+from lib.schedule import requires_refresh, ScheduleBuilder, ScheduleDirector, WeeklyScheduleBuilder, WeeklyScheduleDirector
 
 from datetime import date, datetime, timedelta
 from uuid import UUID
@@ -43,17 +43,36 @@ class ScheduleController(Controller):
         timezone: str
     ) -> Schedule:
         # Fetch schedule if already generated and does not require refresh
-        schedule, created = await schedules_repo.get_or_create(user_id=user.id, date=schedule_date)
-        if (not created and not requires_refresh(schedule)):
+        schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
+        if (schedule != None and not requires_refresh(schedule)):
             return schedule
 
-        # Generate schedule
-        scheduler_builder = ScheduleBuilder(schedule)
-        schedule_director = ScheduleDirector()
-        await schedule_director.generate_schedule(scheduler_builder, user, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
+        # Start new week
+        if (schedule == None):
+            # Create schedules for each day of the week
+            day_time_delta = timedelta(days=1)
+            schedule_date_weekday = schedule_date.weekday()
+            days = [schedule_date + (i - schedule_date_weekday) * day_time_delta for i in range(7)]
+            schedules = [Schedule(user_id=user.id, date=day) for day in days]
 
-        # Save schedule items
-        await schedules_repo.update(schedule, auto_commit=True)
+            # Generate weekly schedule
+            schedule_builder = WeeklyScheduleBuilder(schedules)
+            schedule_director = WeeklyScheduleDirector()
+            await schedule_director.generate_schedule(schedule_builder, user, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
+
+            # Save schedules
+            schedule = schedules[schedule_date_weekday]
+            await schedules_repo.add_many(schedules)
+
+        # Update schedule from the current week
+        else:
+            # Generate schedule
+            schedule_builder = ScheduleBuilder(schedule)
+            schedule_director = ScheduleDirector()
+            await schedule_director.generate_schedule(schedule_builder, user, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
+
+            # Save schedule
+            await schedules_repo.update(schedule, auto_commit=True)
 
         return schedule
 
