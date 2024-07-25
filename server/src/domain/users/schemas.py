@@ -18,7 +18,6 @@ class RegisterInput(BaseModel):
 class LoginInput(BaseModel):
     email: Email
     password: str
-    device_id: str
 
 class ChangePasswordInput(BaseModel):
     password: Password
