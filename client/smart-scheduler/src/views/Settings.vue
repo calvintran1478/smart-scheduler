@@ -40,13 +40,6 @@
               </ion-select-option>
             </ion-select>
           </div>
-          <div class="form-group">
-            <ion-label>Do you tend to procrastinate?</ion-label>
-            <ion-select v-model="tend_to_procrastinate" interface="popover">
-              <ion-select-option :value="true">Yes</ion-select-option>
-              <ion-select-option :value="false">No</ion-select-option>
-            </ion-select>
-          </div>
           <ion-button expand="block" type="submit" class="custom_button">Continue</ion-button>
         </form>
       </div>
@@ -86,7 +79,6 @@ export default defineComponent({
       start_of_work_day: "",
       end_of_work_day: "",
       break_length: "",
-      tend_to_procrastinate: true,
       best_focus_time_start: "",
       best_focus_time_end: ""
     };
@@ -115,7 +107,6 @@ export default defineComponent({
               end_of_work_day: this.end_of_work_day,
               best_focus_times: [`${this.best_focus_time_start} - ${this.best_focus_time_end}`],
               break_length: this.break_length,
-              tend_to_procrastinate: this.tend_to_procrastinate,
             })
           }
         );
