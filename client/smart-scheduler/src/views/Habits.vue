@@ -1,119 +1,206 @@
 <template>
-    <ion-page>
-      <ion-content class="ion-padding">
-        <h1 class="title">Build good habits</h1>
-        <ion-list>
-          <ion-item v-for="habit in habits" :key="habit.name">
-            <ion-label>
-              <h2>{{ habit.name }}</h2>
-              <p>{{ habit.frequency }} times {{ habit.repeat_interval.toLowerCase() }}</p>
-            </ion-label>
-            <ion-button slot="end" @click="editHabit(habit)">Edit</ion-button>
-          </ion-item>
-        </ion-list>
-        <ion-fab vertical="bottom" horizontal="end" slot="fixed">
-          <ion-fab-button @click="openModal">
-            <ion-icon :icon="addOutline"></ion-icon>
-          </ion-fab-button>
-        </ion-fab>
-        <habit-modal v-if="isModalOpen" @close="closeModal" @habit-created="addHabit" />
-        <habit-edit-modal
-          v-if="isEditModalOpen"
-          :habit="selectedHabit"
-          @close="closeEditModal"
-          @habit-updated="updateHabit"
+  <ion-page>
+    <ion-content class="ion-padding">
+      <h1 class="title">Build good habits</h1>
+      <ion-list>
+        <ion-item v-for="habit in habits" :key="habit.name">
+          <ion-label>
+            <h2>{{ habit.name }}</h2>
+            <p>
+              {{ habit.frequency }} times
+              {{ habit.repeat_interval.toLowerCase() }}
+            </p>
+          </ion-label>
+          <ion-button slot="end" @click="editHabit(habit)">Edit</ion-button>
+          <ion-button id="delete-alert" slot="end" color="danger" @click="deleteHabit(habit)"
+            >Delete</ion-button
+          >
+        </ion-item>
+      </ion-list>
+      <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+        <ion-fab-button @click="openModal">
+          <ion-icon :icon="addOutline"></ion-icon>
+        </ion-fab-button>
+      </ion-fab>
+      <habit-modal
+        v-if="isModalOpen"
+        @close="closeModal"
+        @habit-created="addHabit"
       />
-      </ion-content>
-    </ion-page>
-  </template>
+      <habit-edit-modal
+        v-if="isEditModalOpen"
+        :habit="selectedHabit"
+        @close="closeEditModal"
+        @habit-updated="updateHabit"
+      />
+      
+      <ion-alert
+        v-if="isDeleteAlertOpen"
+        header="Confirm Delete"
+        message="Are you sure you want to delete this habit?"
+        :buttons="[
+          {
+            text: 'Cancel',
+            role: 'cancel',
+            handler: () => {
+              this.isDeleteAlertOpen = false;
+            },
+          },
+          {
+            text: 'Delete',
+            role: 'destructive',
+            handler: () => {
+              this.deleteConfirmedHabit();
+            },
+          },
+        ]"
+      />
+    </ion-content>
+  </ion-page>
+</template>
   
   <script>
-  import { IonPage, IonContent, IonList, IonItem, IonLabel, IonFab, IonFabButton, IonIcon } from "@ionic/vue";
-  import { addOutline } from "ionicons/icons";
-  import HabitModal from './HabitModal.vue';
-  import { defineComponent } from "vue";
-  import HabitEditModal from './HabitUpdateModal.vue';
-  
-  export default defineComponent({
-    components: {
-      IonPage,
-      IonContent,
-      IonList,
-      IonItem,
-      IonLabel,
-      IonFab,
-      IonFabButton,
-      IonIcon,
-      HabitModal,
-      HabitEditModal
-    },
-    data() {
-      return {
-        habits: [],
-        isModalOpen: false,
-        addOutline: addOutline,
-        isEditModalOpen: false,
-        selectedHabit: null,
-      };
-    },
-    methods: {
-      async fetchHabits() {
-        const token = localStorage.getItem("token");
-        if (!token) {
-            console.error("No token found");
-            return;
-        }
-        try {
-          const response = await fetch('http://localhost:8000/api/v1/users/habits', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            credentials: "include"
-          });
+import {
+  IonPage,
+  IonContent,
+  IonList,
+  IonItem,
+  IonLabel,
+  IonFab,
+  IonFabButton,
+  IonIcon,
+  IonAlert,
+  IonButton,
+} from "@ionic/vue";
+import { addOutline } from "ionicons/icons";
+import HabitModal from "./HabitModal.vue";
+import { defineComponent } from "vue";
+import HabitEditModal from "./HabitUpdateModal.vue";
 
-          if (response.status === 200) {
-            const data = await response.json();
-            this.habits = data.habits;
-            console.log("Fetch habits successful.");
-          } else {
-            console.error('Failed to fetch habits:', response.statusText);
+export default defineComponent({
+  components: {
+    IonPage,
+    IonContent,
+    IonList,
+    IonItem,
+    IonLabel,
+    IonFab,
+    IonFabButton,
+    IonIcon,
+    HabitModal,
+    HabitEditModal,
+    IonAlert,
+    IonButton,
+  },
+  data() {
+    return {
+      habits: [],
+      isModalOpen: false,
+      addOutline: addOutline,
+      isEditModalOpen: false,
+      selectedHabit: null,
+      isDeleteAlertOpen: false,
+      habitToDelete: null,
+    };
+  },
+  methods: {
+    async fetchHabits() {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+      try {
+        const response = await fetch(
+          "http://localhost:8000/api/v1/users/habits",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
           }
-        } catch (error) {
-          console.error('Error fetching habits:', error);
+        );
+
+        if (response.status === 200) {
+          const data = await response.json();
+          this.habits = data.habits;
+          console.log("Fetch habits successful.");
+        } else {
+          console.error("Failed to fetch habits:", response.statusText);
         }
-      },
-      openModal() {
-        this.isModalOpen = true;
-      },
-      closeModal() {
-        this.isModalOpen = false;
-      },
-      addHabit(newHabit) {
-        this.habits.push(newHabit);
-      },
-      async editHabit(habit) {
-        await this.fetchHabits();
-        this.isEditModalOpen = true;
-        this.selectedHabit = habit;
-      },
-      closeEditModal() {
-        this.isEditModalOpen = false;
+      } catch (error) {
+        console.error("Error fetching habits:", error);
       }
     },
-    mounted() {
-      this.fetchHabits();
-    }
-  });
-  </script>
+    openModal() {
+      this.isModalOpen = true;
+    },
+    closeModal() {
+      this.isModalOpen = false;
+    },
+    addHabit(newHabit) {
+      this.habits.push(newHabit);
+    },
+    async editHabit(habit) {
+      await this.fetchHabits();
+      this.isEditModalOpen = true;
+      this.selectedHabit = habit;
+    },
+    closeEditModal() {
+      this.isEditModalOpen = false;
+    },
+    deleteHabit(habit) {
+      this.habitToDelete = habit;
+      this.isDeleteAlertOpen = true;
+    },
+    async deleteConfirmedHabit() {
+      console.log("here");
+      const habit = this.habitToDelete;
+      console.log("Deleting " + habit.name);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+      try {
+        const response = await fetch(
+          `http://localhost:8000/api/v1/users/habits/${habit.name}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+          }
+        );
+
+        if (response.status === 204) {
+          this.habits = this.habits.filter((h) => h.name !== habit.name);
+          this.isDeleteAlertOpen = false;
+          console.log("Delete habit successful.");
+        } else {
+          console.error("Failed to delete habit:", response.statusText);
+        }
+      } catch (error) {
+        console.error("Error deleting habit:", error);
+      }
+    },
+  },
+  mounted() {
+    this.fetchHabits();
+  },
+});
+</script>
   
   <style scoped>
-  .title {
-    padding-top: 30px;
-    font-size: 28px;
-    font-weight: bold;
-    text-align: left;
-    padding-left: 25px;
-  }
-  </style>
+.title {
+  padding-top: 30px;
+  font-size: 28px;
+  font-weight: bold;
+  text-align: left;
+  padding-left: 25px;
+}
+</style>
   
