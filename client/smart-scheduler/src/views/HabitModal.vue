@@ -33,10 +33,10 @@
         <ion-item>
           <ion-label position="stacked">Time Preference</ion-label>
           <ion-select v-model="time_preference" multiple placeholder="Select time preference">
-            <ion-select-option value="Daily">Morning</ion-select-option>
-            <ion-select-option value="Weekly">Afternoon</ion-select-option>
-            <ion-select-option value="Monthly">Evening</ion-select-option>
-            <ion-select-option value="Yearly">Night</ion-select-option>
+            <ion-select-option value="morning">Morning</ion-select-option>
+            <ion-select-option value="afternoon">Afternoon</ion-select-option>
+            <ion-select-option value="evening">Evening</ion-select-option>
+            <ion-select-option value="night">Night</ion-select-option>
           </ion-select>
         </ion-item>
         <ion-button expand="block" @click="createHabit">Create Habit</ion-button>
