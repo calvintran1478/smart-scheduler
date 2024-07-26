@@ -6,7 +6,7 @@
           <ion-item v-for="task in tasks" :key="task.task_id">
             <ion-label>
               <h2>{{ task.name }}</h2>
-              <p>Due: {{ task.deadline.split('T')[0] }} at {{ task.deadline.split('T')[1] }}</p>
+              <p>Due: {{ task.deadline.split('T')[0] }} at {{ task.deadline.split('T')[1].split('-')[0] }}</p>
               <p v-if="task.tag">Tag: {{ task.tag.name }} <span :style="{color: task.tag.colour}">●</span></p>
             </ion-label>
           </ion-item>
