@@ -10,11 +10,12 @@ from litestar.stores.redis import RedisStore
 
 from models.user import User
 from lib.token import parse_claims
-from config.settings import DB_USER, DB_PASSWORD, DB_HOST, DB_NAME
+from config.settings import DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME, SSL_MODE, \
+    AUTH_DB_USER, AUTH_DB_PASSWORD, AUTH_DB_HOST, AUTH_DB_PORT, AUTH_TLS_ENABLED
 
-dragonfly_store = RedisStore.with_client()
-blacklist_store = dragonfly_store.with_namespace("blacklist")
-token_family_store = dragonfly_store.with_namespace("token_family")
+valkey_store = RedisStore.with_client(url=f"{"rediss" if AUTH_TLS_ENABLED else "redis"}://{AUTH_DB_USER}:{AUTH_DB_PASSWORD}@{AUTH_DB_HOST}:{AUTH_DB_PORT}")
+blacklist_store = valkey_store.with_namespace("blacklist")
+token_family_store = valkey_store.with_namespace("token_family")
 
 class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
     async def authenticate_request(self, connection: ASGIConnection) -> AuthenticationResult:
@@ -39,7 +40,7 @@ class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
 
         # Get user
         session_maker = async_sessionmaker()
-        engine = create_async_engine(f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}")
+        engine = create_async_engine(f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode={SSL_MODE}")
         async with session_maker(bind=engine) as session:
             try:
                 user_result = await session.execute(select(User).where(User.id == access_claims["user_id"]))
