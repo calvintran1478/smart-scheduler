@@ -2,6 +2,11 @@ import { createRouter, createWebHistory } from '@ionic/vue-router';
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Settings from '../views/Settings.vue'
+import Home from '../views/Home.vue'
+import Tasks from '../views/Tasks.vue'
+import Habits from '../views/Habits.vue'
+import Pomodoro from '../views/Pomodoro.vue'
+import Timetable from '../views/Timetable.vue'
 
 const routes = [
   {
@@ -22,6 +27,31 @@ const routes = [
     path: '/settings',
     name: 'Settings',
     component: Settings
+  },
+  {
+    path: '/home',
+    name: 'Home',
+    component: Home
+  },
+  {
+    path: '/tasks',
+    name: 'Tasks',
+    component: Tasks
+  },
+  {
+    path: '/habits',
+    name: 'Habits',
+    component: Habits
+  },
+  {
+    path: '/pomodoro',
+    name: 'Pomodoro',
+    component: Pomodoro
+  },
+  {
+    path: '/timetable',
+    name: 'Timetable',
+    component: Timetable
   }
 ]
 

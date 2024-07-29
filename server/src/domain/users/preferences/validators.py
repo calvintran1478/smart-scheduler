@@ -9,8 +9,8 @@ def check_focus_times(focus_times: list[str]) -> list[list[time]]:
         start_end_time_components = [interval.split(" - ") for interval in focus_times]
         start_end_times = [
             {
-                "start_time": datetime.strptime(interval[0], '%H:%M:%S').time(),
-                "end_time": datetime.strptime(interval[1], '%H:%M:%S').time()
+                "start_time": datetime.strptime(interval[0], '%H:%M').time(),
+                "end_time": datetime.strptime(interval[1], '%H:%M').time()
             }
             for interval in start_end_time_components]
 

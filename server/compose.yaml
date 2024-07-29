@@ -1,0 +1,11 @@
+services:
+  valkey:
+    image: 'valkey/valkey:latest'
+    container_name: valkey
+    command: ["valkey-server", "/etc/valkey/valkey.conf"]
+    network_mode: host
+    volumes:
+      - ./src/config/valkey.conf:/etc/valkey/valkey.conf
+      - valkeydata:/data
+volumes:
+  valkeydata:
