@@ -7,7 +7,6 @@ from litestar.status_codes import HTTP_200_OK
 from litestar.datastructures import Cookie
 from litestar.exceptions import NotAuthorizedException
 from models.user import User
-from models.device import Device
 
 def generate_access_token(user_id: UUID) -> str:
     claims = {
@@ -18,10 +17,10 @@ def generate_access_token(user_id: UUID) -> str:
 
     return jwt.encode(claims, API_SECRET)
 
-def generate_refresh_token(user_id: UUID, device_id: str, sequence_number: int) -> str:
+def generate_refresh_token(user_id: UUID, token_family_id: UUID, sequence_number: int) -> str:
     claims = {
         "user_id": str(user_id),
-        "device_id": device_id,
+        "token_family_id": str(token_family_id),
         "sequence_number": sequence_number,
         "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=REFRESH_TOKEN_HOUR_LIFESPAN)
     }
@@ -35,9 +34,9 @@ def parse_claims(token: str) -> dict | None:
         raise NotAuthorizedException
 
 class TokenResponse(Response):
-    def __init__(self, user_id: UUID, device_id: str, sequence_number: int) -> None:
+    def __init__(self, user_id: UUID, token_family_id: UUID, sequence_number: int) -> None:
         access_token = generate_access_token(user_id)
-        refresh_token = generate_refresh_token(user_id, device_id, sequence_number)
+        refresh_token = generate_refresh_token(user_id, token_family_id, sequence_number)
 
         refresh_cookie = Cookie(
             key="refresh-token",
