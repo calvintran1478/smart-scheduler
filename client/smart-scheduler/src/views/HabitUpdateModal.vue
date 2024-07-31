@@ -47,6 +47,7 @@
   <script>
   import { IonModal, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonContent, IonItem, IonLabel, IonInput, IonSelect, IonSelectOption } from "@ionic/vue";
   import { defineComponent } from "vue";
+  import { refreshToken, logout } from "../services/auth";
   
   export default defineComponent({
     components: {
@@ -81,7 +82,8 @@
         frequency: this.habit.frequency,
         duration: this.habit.duration,
         repeat_interval: this.habit.repeat_interval,
-        time_preference: this.habit.time_preference
+        time_preference: this.habit.time_preference,
+        refreshed: false,
       };
     },
     methods: {
@@ -118,6 +120,18 @@
             this.$emit('habit-updated');
             this.closeModal();
             console.log('Update habit successful');
+          } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.updateHabit()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
           } else {
             console.error('Failed to update habit:', response.statusText);
           }

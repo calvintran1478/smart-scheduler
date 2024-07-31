@@ -33,6 +33,7 @@
   import HabitModal from './HabitModal.vue';
   import { defineComponent } from "vue";
   import HabitEditModal from './HabitUpdateModal.vue';
+  import { refreshToken, logout } from "../services/auth";
   
   export default defineComponent({
     components: {
@@ -54,6 +55,7 @@
         addOutline: addOutline,
         isEditModalOpen: false,
         selectedHabit: null,
+        refreshed: false,
       };
     },
     methods: {
@@ -76,6 +78,18 @@
             const data = await response.json();
             this.habits = data.habits;
             console.log("Fetch habits successful.");
+          } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.fetchHabits()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
           } else {
             console.error('Failed to fetch habits:', response.statusText);
           }

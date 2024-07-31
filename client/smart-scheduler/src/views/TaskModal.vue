@@ -101,6 +101,7 @@ import {
   IonSelectOption,
 } from "@ionic/vue";
 import { defineComponent } from "vue";
+import { refreshToken, logout } from "../services/auth";
 
 export default defineComponent({
   components: {
@@ -142,7 +143,8 @@ export default defineComponent({
       basicColours: ["red", "blue", "green", "yellow", "purple"],
       hours: Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")),
       minutes: Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      refreshed: false,
     };
   },
   methods: {
@@ -189,6 +191,18 @@ export default defineComponent({
           if (response.status === 201) {
             const createdTag = await response.json();
             task.tag = createdTag.name;
+          } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.createTask()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
           } else {
             console.error("Failed to create tag:", response.statusText);
             return;
@@ -218,7 +232,19 @@ export default defineComponent({
           this.$emit("task-created", newTask);
           this.closeModal();
           console.log("Create task successful.");
-        } else {
+        } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.createTask()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
+          } else {
           console.error("Failed to create task:", response.statusText);
         }
       } catch (error) {
@@ -249,7 +275,19 @@ export default defineComponent({
           const data = await response.json();
           this.tags = data.tags;
           console.log("Fetch tags successful");
-        } else {
+        } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.fetchTags()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
+          } else {
           console.error("Failed to fetch tags:", response.statusText);
         }
       } catch (error) {

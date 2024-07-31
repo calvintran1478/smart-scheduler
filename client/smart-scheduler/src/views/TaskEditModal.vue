@@ -66,6 +66,7 @@
     IonSelectOption,
   } from "@ionic/vue";
   import { defineComponent, ref, watch } from "vue";
+  import { refreshToken, logout } from "../services/auth";
   
   export default defineComponent({
     components: {
@@ -98,6 +99,7 @@
       const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
       const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const refreshed = ref(false);
   
       const fetchTags = async () => {
         const token = localStorage.getItem("token");
@@ -119,6 +121,18 @@
           if (response.ok) {
             const data = await response.json();
             tags.value = data.tags;
+          } else if (response.status == 401) {
+            // refresh token
+            if (!refreshed.value) {
+              await refreshToken();
+              refreshed.value = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.fetchTags()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
           } else {
             console.error("Error fetching tags:", response.statusText);
           }
@@ -161,6 +175,18 @@
             emit("task-updated");
             console.log("Update task successful.");
             closeModal();
+          } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.updateTask()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
           } else {
             console.error("Failed to update task:", response.statusText);
           }

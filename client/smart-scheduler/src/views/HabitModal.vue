@@ -47,6 +47,7 @@
   <script>
   import { IonModal, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonContent, IonItem, IonLabel, IonInput, IonSelect, IonSelectOption } from "@ionic/vue";
   import { defineComponent } from "vue";
+  import { refreshToken, logout } from "../services/auth";
   
   export default defineComponent({
     components: {
@@ -69,7 +70,8 @@
         frequency: 1,
         repeat_interval: 'Daily',
         duration: 1,
-        time_preference: []
+        time_preference: [],
+        refreshed: false,
       };
     },
     methods: {
@@ -106,6 +108,18 @@
             this.$emit('habit-created', newHabit);
             this.closeModal();
             console.log('Create task sucessful.')
+          } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.createHabit()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
           } else {
             console.error('Failed to create habit:', response.statusText);
           }

@@ -80,6 +80,7 @@ import {
   settingsOutline,
   analyticsOutline
 } from "ionicons/icons";
+import { refreshToken, logout } from "../services/auth";
 
 export default defineComponent({
   components: {
@@ -99,15 +100,52 @@ export default defineComponent({
       checkmarkDoneOutline,
       repeatOutline,
       settingsOutline,
-      analyticsOutline
+      analyticsOutline,
+      refreshed: false,
     };
   },
   methods: {
-    logout() {
+    async logout() {
       localStorage.removeItem('token');
       this.email = '';
       this.password = '';
       this.$router.push('/');
+      const token = localStorage.getItem("token"); 
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/users/logout', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            credentials: "include",
+          });
+  
+          if (response.status === 204) {
+            console.log('Logout sucessful.')
+          } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.logout()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
+          } else {
+            console.error('Failed to log out:', response.statusText);
+          }
+      }
+      catch {
+        console.error('Error logging out:', error);
+      }
     }
   }
 });

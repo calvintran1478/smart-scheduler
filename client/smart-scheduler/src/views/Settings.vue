@@ -59,6 +59,7 @@ import {
   IonSelectOption
 } from "@ionic/vue";
 import { defineComponent } from "vue";
+import { refreshToken, logout } from "../services/auth";
 
 export default defineComponent({
   components: {
@@ -80,7 +81,8 @@ export default defineComponent({
       end_of_work_day: "",
       break_length: "",
       best_focus_time_start: "",
-      best_focus_time_end: ""
+      best_focus_time_end: "",
+      refreshed: false,
     };
   },
   methods: {
@@ -114,7 +116,19 @@ export default defineComponent({
           console.log("Settings successful");
           // Redirect to home page if successful
           this.$router.push('/home');
-        } else {
+        } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.userSettings()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
+          } else {
           throw new Error("Settings failed");
         }
       } catch (error) {

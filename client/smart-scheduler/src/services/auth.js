@@ -29,11 +29,10 @@ export async function refreshToken() {
         });
 
         if (response.ok) {
-            // no need to store?
-            //const data = await response.json();
-            //const newToken = data.access_token;
+            const data = await response.json();
+            const newToken = data.access_token;
+            localStorage.setItem("token", newToken);
 
-            //setCookie('refresh-token', newToken, 1);
             console.log("Refresh token successful")
         } else {
             console.error('Failed to refresh token:', response.statusText);
@@ -44,3 +43,32 @@ export async function refreshToken() {
 }
 
 setInterval(refreshToken, 15 * 60 * 1000); // Refresh token every 15 minl
+
+export async function logout() {
+    const token = localStorage.getItem("token"); 
+    if (!token) {
+      console.error("No token found");
+      return;
+    }
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/users/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: "include",
+        });
+
+        if (response.status === 204) {
+            localStorage.removeItem('token');
+            this.$router.push('/');
+          console.log('Logout sucessful.')
+        } else {
+          console.error('Failed to log out:', response.statusText);
+        }
+    }
+    catch {
+      console.error('Error logging out:', error);
+    }
+  }

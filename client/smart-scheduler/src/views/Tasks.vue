@@ -79,6 +79,7 @@ import { defineComponent, ref, onMounted } from "vue";
 import { addOutline } from "ionicons/icons";
 import TaskModal from "./TaskModal.vue";
 import TaskEditModal from "./TaskEditModal.vue";
+import { refreshToken, logout } from "../services/auth";
 
 export default defineComponent({
   components: {
@@ -105,6 +106,7 @@ export default defineComponent({
     const isDeleteAlertOpen = ref(false);
     const selectedTask = ref(null);
     const taskToDelete = ref(null);
+    const refreshed = ref(false);
 
     const openModal = () => {
       isModalOpen.value = true;
@@ -154,7 +156,19 @@ export default defineComponent({
         if (response.status === 204) {
           tasks.value = tasks.value.filter((t) => t.task_id !== task.task_id);
           isDeleteAlertOpen.value = false;
-        } else {
+        } else if (response.status == 401) {
+            // refresh token
+            if (!refreshed.value) {
+              await refreshToken();
+              refreshed.value = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.deleteConfirmedTask()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
+          } else {
           console.error("Failed to delete task:", response.statusText);
         }
       } catch (error) {
@@ -190,7 +204,19 @@ const fetchTasks = async () => {
       tasks.value = data.tasks;
       console.log("Fetch tasks successful.");
       console.log(tasks.value);
-    } else {
+    } else if (response.status == 401) {
+            // refresh token
+            if (!refreshed.value) {
+              await refreshToken();
+              refreshed.value = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.fetchTasks()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
+          } else {
       console.error("Failed to fetch tasks: ", response.status, response.statusText);
     }
   } catch (err) {

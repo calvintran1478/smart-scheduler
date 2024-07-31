@@ -24,6 +24,7 @@
   } from "@ionic/vue";
   import { defineComponent } from "vue";
   import { format } from "date-fns";
+  import { refreshToken, logout } from "../services/auth";
   
   export default defineComponent({
     components: {
@@ -36,6 +37,7 @@
     data() {
       return {
         scheduleItems: [],
+        refreshed: false,
       };
     },
     methods: {
@@ -58,6 +60,18 @@
           if (response.status === 200) {
             const data = await response.json();
             this.scheduleItems = data.schedule_items;
+          } else if (response.status == 401) {
+            // refresh token
+            if (!this.refreshed) {
+              await refreshToken();
+              this.refreshed = true;
+              console.log('Token refresh successful.')
+              // try again
+              this.fetchSchedule()
+            } else {
+              console.log('Time out.')
+              logout();
+            }
           } else {
             console.error('Failed to fetch schedule:', response.statusText);
           }
