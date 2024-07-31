@@ -1,4 +1,4 @@
-from litestar import Controller, post, get, patch
+from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT, HTTP_409_CONFLICT
 from litestar.exceptions import ClientException, NotFoundException
 from litestar.di import Provide
@@ -126,3 +126,18 @@ class ScheduleController(Controller):
                 raise ClientException(detail="New times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
 
         await schedules_repo.update(schedule, auto_commit=True)
+
+    @delete(path="/{schedule_date:date}/focus_sessions/{schedule_item_id:uuid}")
+    async def remove_focus_session(self, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+        # Fetch schedule
+        schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
+        if (schedule == None):
+            raise NotFoundException(detail="Focus session not found")
+
+        # Remove focus session from schedule if it exists
+        for i, schedule_item in enumerate(schedule.schedule_items):
+            if (schedule_item.id == schedule_item_id and schedule_item.schedule_item_type == ScheduleItemTypeEnum.FOCUS_SESSION):
+                del schedule.schedule_items[i]
+                return
+
+        raise NotFoundException(detail="Focus session not found")
