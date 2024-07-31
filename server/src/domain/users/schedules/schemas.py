@@ -18,6 +18,11 @@ class CreateFocusSessionInput(BaseModel):
 
         return self
 
-class UpdateScheduleItemInput(BaseModel):
+class UpdateFocusSessionInput(BaseModel):
+    name: Optional[str] = None
+    start_time: Optional["datetime.time"] = None
+    end_time: Optional["datetime.time"] = None
+
+class UpdateHabitSessionInput(BaseModel):
     start_time: Optional["datetime.time"] = None
     end_time: Optional["datetime.time"] = None

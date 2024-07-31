@@ -8,7 +8,7 @@ from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
 from models.user import User
 from domain.users.schedules.repositories import ScheduleRepository
 from domain.users.schedules.dependencies import provide_schedules_repo
-from domain.users.schedules.schemas import CreateFocusSessionInput, UpdateScheduleItemInput
+from domain.users.schedules.schemas import CreateFocusSessionInput, UpdateFocusSessionInput, UpdateHabitSessionInput
 from domain.users.schedules.dtos import ScheduleDTO, ScheduleItemDTO
 from domain.users.preferences.repositories import PreferenceRepository
 from domain.users.preferences.dependencies import provide_preferences_repo
@@ -56,7 +56,7 @@ class ScheduleController(Controller):
 
         return schedule
 
-    @post(path="/{schedule_date:date}/focus_sessions", return_dto=ScheduleItemDTO)
+    @post(path="/{schedule_date:date}/focus-sessions", return_dto=ScheduleItemDTO)
     async def create_focus_session(
         self,
         data: CreateFocusSessionInput,
@@ -93,41 +93,34 @@ class ScheduleController(Controller):
 
         return focus_session
 
-    @patch(path="/{schedule_date:date}/schedule_items/{schedule_item_id:uuid}", status_code=HTTP_204_NO_CONTENT)
-    async def update_schedule_item(self, data: UpdateScheduleItemInput, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
-        # Search for schedule item
-        selected_schedule_item = None
+    @patch(path="/{schedule_date:date}/focus-sessions/{schedule_item_id:uuid}", status_code=HTTP_204_NO_CONTENT)
+    async def update_focus_session(self, data: UpdateFocusSessionInput, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+        # Get schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
         if (schedule == None):
-            raise NotFoundException(detail="Schedule item not found")
+            raise NotFoundException(detail="Focus session not found")
 
+        # Search for focus session
         try:
-            selected_schedule_item = next(schedule_item for schedule_item in schedule.schedule_items if schedule_item.id == schedule_item_id)
+            focus_session = next(schedule_item for schedule_item in schedule.schedule_items if schedule_item.id == schedule_item_id and schedule_item.schedule_item_type == ScheduleItemTypeEnum.FOCUS_SESSION)
         except StopIteration:
-            raise NotFoundException(detail="Schedule item not found")
+            raise NotFoundException(detail="Focus session not found")
 
-        # Check if this schedule item can be modified
-        if (selected_schedule_item.schedule_item_type in [ScheduleItemTypeEnum.SLEEP, ScheduleItemTypeEnum.EVENT]):
-            raise ClientException(detail="Schedule item must be a habit session or work session")
-
-        # Update time values
-        if (data.start_time != None):
-            selected_schedule_item.start_time = data.start_time
-
-        if (data.end_time != None):
-            selected_schedule_item.end_time = data.end_time
+        # Update focus session
+        for attribute_name, attribute_value in data.__dict__.items():
+            if (attribute_value != None):
+                setattr(focus_session, attribute_name, attribute_value)
 
         # Check if new time values are valid
-        if (selected_schedule_item.start_time > selected_schedule_item.end_time):
+        if (focus_session.start_time > focus_session.end_time):
             raise ClientException(detail="Start time must come before end time")
 
-        if any(selected_schedule_item.end_time > schedule_item.start_time and selected_schedule_item.start_time < schedule_item.end_time \
-            for schedule_item in schedule.schedule_items if schedule_item.id != selected_schedule_item.id):
-                raise ClientException(detail="New times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
+        if any(schedule_item.start_time < focus_session.end_time and schedule_item.end_time > focus_session.start_time and schedule_item.id != focus_session.id for schedule_item in schedule.schedule_items):
+            raise ClientException(detail="New times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
 
         await schedules_repo.update(schedule, auto_commit=True)
 
-    @delete(path="/{schedule_date:date}/focus_sessions/{schedule_item_id:uuid}")
+    @delete(path="/{schedule_date:date}/focus-sessions/{schedule_item_id:uuid}")
     async def remove_focus_session(self, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
         # Fetch schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
@@ -141,3 +134,30 @@ class ScheduleController(Controller):
                 return
 
         raise NotFoundException(detail="Focus session not found")
+
+    @patch(path="/{schedule_date:date}/habit-sessions/{schedule_item_id:uuid}", status_code=HTTP_204_NO_CONTENT)
+    async def update_habit_session(self, data: UpdateHabitSessionInput, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+        # Get schedule
+        schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
+        if (schedule == None):
+            raise NotFoundException(detail="Habit session not found")
+
+        # Search for habit session
+        try:
+            habit_session = next(schedule_item for schedule_item in schedule.schedule_items if schedule_item.id == schedule_item_id and schedule_item.schedule_item_type == ScheduleItemTypeEnum.HABIT)
+        except StopIteration:
+            raise NotFoundException(detail="Habit session not found")
+
+        # Update habit session
+        for attribute_name, attribute_value in data.__dict__.items():
+            if (attribute_value != None):
+                setattr(habit_session, attribute_name, attribute_value)
+
+        # Check if new time values are valid
+        if (habit_session.start_time > habit_session.end_time):
+            raise ClientException(detail="Start time must come before end time")
+
+        if any(schedule_item.start_time < habit_session.end_time and schedule_item.end_time > habit_session.start_time and schedule_item.id != habit_session.id for schedule_item in schedule.schedule_items):
+            raise ClientException(detail="New times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
+
+        await schedules_repo.update(schedule, auto_commit=True)
