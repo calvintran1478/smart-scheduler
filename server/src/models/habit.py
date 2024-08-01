@@ -7,8 +7,6 @@ import enum
 class RepeatIntervalEnum(str, enum.Enum):
     DAILY = "DAILY"
     WEEKLY = "WEEKLY"
-    MONTHLY = "MONTHLY"
-    YEARLY = "YEARLY"
 
 class TimePrefererenceEnum(str, enum.Enum):
     MORNING = "morning"
