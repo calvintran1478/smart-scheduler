@@ -7,6 +7,7 @@ class Schedule(UUIDBase):
     __tablename__ = "schedules"
 
     date: Mapped[date]
+    timezone: Mapped[str] = mapped_column(default="UTC")
     requires_event_refresh: Mapped[bool] = mapped_column(default=True)
     requires_habit_refresh: Mapped[bool] = mapped_column(default=True)
     requires_sleep_refresh: Mapped[bool] = mapped_column(default=True)

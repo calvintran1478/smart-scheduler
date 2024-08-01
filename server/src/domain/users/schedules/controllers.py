@@ -40,7 +40,7 @@ class ScheduleController(Controller):
         preferences_repo: PreferenceRepository,
         events_repo: EventRepository,
         habits_repo: HabitRepository,
-        timezone: str
+        timezone: str = "UTC"
     ) -> Schedule:
         # Check if the schedule has already been generated
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
@@ -51,7 +51,7 @@ class ScheduleController(Controller):
             schedule = weekly_schedule[schedule_date.weekday()]
 
         # If yes, refresh the schedule if necessary
-        elif (requires_refresh(schedule)):
+        elif (requires_refresh(schedule, timezone)):
             await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
 
         return schedule
@@ -73,7 +73,7 @@ class ScheduleController(Controller):
         if (schedule == None):
             weekly_schedule = await schedules_repo.create_weekly_schedule(user, schedule_date, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
             schedule = weekly_schedule[schedule_date.weekday()]
-        elif (requires_refresh(schedule)):
+        elif (requires_refresh(schedule, timezone)):
             await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
 
         # Check if chosen times overlap with existing schedule items
