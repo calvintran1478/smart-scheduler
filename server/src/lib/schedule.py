@@ -60,12 +60,19 @@ def get_events_for_the_day(event_date: date, events: list[Event], timezone_forma
     event_date_end_time = event_date_start_time + timedelta(days=1)
     return [event for event in events if event.end_time > event_date_start_time and event.start_time < event_date_end_time]
 
-def requires_refresh(schedule: Schedule, timezone: str) -> bool:
-    timezone_change = (timezone != schedule.timezone)
+def requires_refresh(schedule: Schedule, timezone_str: str) -> bool:
+    timezone_change = (timezone_str != schedule.timezone)
     event_exists = any(schedule_item.schedule_item_type == ScheduleItemTypeEnum.EVENT for schedule_item in schedule.schedule_items)
 
     return schedule.requires_event_refresh or schedule.requires_habit_refresh \
         or schedule.requires_sleep_refresh or schedule.requires_work_refresh or (event_exists and timezone_change)
+
+async def requires_week_refresh(schedule: Schedule, timezone_str: str, user: User, habits_repo: HabitRepository) -> bool:
+    timezone_change = (timezone_str != schedule.timezone)
+    event_exists = any(schedule_item.schedule_item_type == ScheduleItemTypeEnum.EVENT for schedule_item in schedule.schedule_items)
+
+    return (schedule.requires_habit_refresh or (event_exists and timezone_change)) \
+        and (await habits_repo.exists(user_id=user.id, repeat_interval=RepeatIntervalEnum.WEEKLY))
 
 def get_weekly_preferred_times(daily_preferred_times: list[tuple[int, int]]) -> list[tuple[int, int]]:
     weekly_preferred_times = []
@@ -211,8 +218,16 @@ class WeeklyScheduleBuilder:
             ]
 
             for schedule in self.schedules:
-                schedule.schedule_items += deepcopy(sleep_schedule_items)
-                schedule.requires_sleep_refresh = False
+                if (schedule.requires_sleep_refresh):
+                    # Remove previous sleep hours
+                    schedule.schedule_items = [
+                        schedule_item for schedule in schedule.schedule_items
+                        if schedule_item.schedule_item_type != ScheduleItemTypeEnum.SLEEP
+                    ]
+
+                    # Add new sleep hours
+                    schedule.schedule_items += deepcopy(sleep_schedule_items)
+                    schedule.requires_sleep_refresh = False
 
     async def schedule_events(self, user: User, events_repo: EventRepository, timezone_format: timezone) -> None:
         # Get events for the week
@@ -223,19 +238,27 @@ class WeeklyScheduleBuilder:
 
         # Add corresponding event items to each day
         for schedule in self.schedules:
-            events_for_the_day = get_events_for_the_day(schedule.date, events, timezone_format)
-            schedule.schedule_items += [
-                ScheduleItem(
-                    name=event.summary,
-                    start_time=time() if (event.start_time.date() < schedule.date) else event.start_time.time(),
-                    end_time=time(23, 59, 59) if (event.end_time.date() > schedule.date) else event.end_time.time(),
-                    schedule_item_type=ScheduleItemTypeEnum.EVENT,
-                ) for event in events_for_the_day
-            ]
+            if (schedule.requires_event_refresh):
+                # Remove previous event items
+                schedule.schedule_items = [
+                    schedule_item for schedule_item in schedule.schedule_items
+                    if schedule_item.schedule_item_type != ScheduleItemTypeEnum.EVENT
+                ]
 
-            # Declare timezone used for schedule
-            schedule.timezone = str(timezone_format)
-            schedule.requires_event_refresh = False
+                # Add new event items
+                events_for_the_day = get_events_for_the_day(schedule.date, events, timezone_format)
+                schedule.schedule_items += [
+                    ScheduleItem(
+                        name=event.summary,
+                        start_time=time() if (event.start_time.date() < schedule.date) else event.start_time.time(),
+                        end_time=time(23, 59, 59) if (event.end_time.date() > schedule.date) else event.end_time.time(),
+                        schedule_item_type=ScheduleItemTypeEnum.EVENT,
+                    ) for event in events_for_the_day
+                ]
+
+                # Declare timezone used for schedule
+                schedule.timezone = str(timezone_format)
+                schedule.requires_event_refresh = False
 
     def schedule_habits(self, habits: list[Habit]) -> None:
         daily_habits = [habit for habit in habits if habit.repeat_interval == RepeatIntervalEnum.DAILY]
@@ -244,12 +267,21 @@ class WeeklyScheduleBuilder:
         # Schedule daily habits
         schedule_builder = ScheduleBuilder(self.schedules[0])
         for schedule in self.schedules:
-            schedule_builder.schedule = schedule
-            schedule_builder.schedule_habits(daily_habits)
+            if (schedule.requires_habit_refresh):
+                schedule_builder.schedule = schedule
+                schedule_builder.schedule_habits(daily_habits)
 
         # Schedule weekly habits
         num_weekly_habit_instances = sum(habit.frequency for habit in weekly_habits)
         if (num_weekly_habit_instances != 0):
+            # Remove previous weekly habit sessions
+            weekly_habit_names = tuple(habit.name for habit in weekly_habits)
+            for schedule in self.schedules:
+                schedule.schedule_items = [
+                    schedule_item for schedule_item in schedule.schedule_items
+                    if schedule_item.schedule_item_type != ScheduleItemTypeEnum.HABIT or schedule_item.name not in weekly_habit_names
+                ]
+
             # Get occupied timeblocks
             schedule_time_blocks = [get_schedule_time_blocks(schedule) for schedule in self.schedules]
             for i, daily_time_blocks in enumerate(schedule_time_blocks):
@@ -285,8 +317,9 @@ class WeeklyScheduleBuilder:
     def schedule_work_sessions(self, preference: Preference) -> None:
         schedule_builder = ScheduleBuilder(self.schedules[0])
         for schedule in self.schedules:
-            schedule_builder.schedule = schedule
-            schedule_builder.schedule_work_sessions(preference)
+            if (schedule.requires_work_refresh):
+                schedule_builder.schedule = schedule
+                schedule_builder.schedule_work_sessions(preference)
 
 class ScheduleDirector:
 
@@ -340,13 +373,34 @@ class WeeklyScheduleDirector:
         habits_repo: HabitRepository,
         timezone_format: timezone
     ) -> None:
-        # Fetch necessary info for creating the schedule
-        preference = await preferences_repo.get_one_or_none(user_id = user.id)
-        habits = await habits_repo.list(user_id = user.id)
+        # Check for timezone change
+        timezone_str = str(timezone_format)
+        for schedule in builder.schedules:
+            timezone_change = timezone_str != schedule.timezone
+            event_exists = any(schedule_item.schedule_item_type == ScheduleItemTypeEnum.EVENT for schedule_item in schedule.schedule_items)
+            if (event_exists and timezone_change):
+                schedule.requires_event_refresh = True
+                schedule.requires_habit_refresh = True
+                schedule.requires_work_refresh = True
 
-        # Create weekly schedule
-        builder.reset()
-        builder.schedule_sleep_hours(preference)
-        await builder.schedule_events(user, events_repo, timezone_format)
-        builder.schedule_habits(habits)
-        builder.schedule_work_sessions(preference)
+        # Fetch preferences if needed
+        preference = None
+        if any(schedule.requires_sleep_refresh or schedule.requires_work_refresh for schedule in builder.schedules):
+            preference = await preferences_repo.get_one_or_none(user_id = user.id)
+
+        # Schedule sleep hours
+        if any(schedule.requires_sleep_refresh for schedule in builder.schedules):
+            builder.schedule_sleep_hours(preference)
+
+        # Schedule events
+        if any(schedule.requires_event_refresh for schedule in builder.schedules):
+            await builder.schedule_events(user, events_repo, timezone_format)
+
+        # Schedule habits
+        if any(schedule.requires_habit_refresh for schedule in builder.schedules):
+            habits = await habits_repo.list(user_id = user.id)
+            builder.schedule_habits(habits)
+
+        # Schedule work sessions
+        if any(schedule.requires_work_refresh for schedule in builder.schedules):
+            builder.schedule_work_sessions(preference)

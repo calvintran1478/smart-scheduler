@@ -5,6 +5,7 @@ from litestar.di import Provide
 
 from models.schedule import Schedule
 from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
+from models.habit import RepeatIntervalEnum
 from models.user import User
 from domain.users.schedules.repositories import ScheduleRepository
 from domain.users.schedules.dependencies import provide_schedules_repo
@@ -18,7 +19,7 @@ from domain.users.events.validators import check_timezone
 from domain.users.habits.repositories import HabitRepository
 from domain.users.habits.dependencies import provide_habits_repo
 from lib.time import convert_to_utc, seconds_to_time_object
-from lib.schedule import requires_refresh
+from lib.schedule import requires_refresh, requires_week_refresh
 
 from datetime import date
 from uuid import UUID
@@ -45,12 +46,12 @@ class ScheduleController(Controller):
         # Check if the schedule has already been generated
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
 
-        # If not, plan out schedule for the week
-        if (schedule == None):
+        # If not, or its associated weekly schedule requires a refresh, plan out schedule for the week
+        if (schedule == None or (await requires_week_refresh(schedule, timezone, user, habits_repo))):
             weekly_schedule = await schedules_repo.create_weekly_schedule(user, schedule_date, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
             schedule = weekly_schedule[schedule_date.weekday()]
 
-        # If yes, refresh the schedule if necessary
+        # Otherwise return the schedule after refreshing it if necessary
         elif (requires_refresh(schedule, timezone)):
             await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
 
@@ -70,7 +71,7 @@ class ScheduleController(Controller):
     ) -> ScheduleItem:
         # Get schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
-        if (schedule == None):
+        if (schedule == None or (await requires_week_refresh(schedule, timezone, user, habits_repo))):
             weekly_schedule = await schedules_repo.create_weekly_schedule(user, schedule_date, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
             schedule = weekly_schedule[schedule_date.weekday()]
         elif (requires_refresh(schedule, timezone)):
