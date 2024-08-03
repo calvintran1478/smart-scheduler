@@ -155,15 +155,15 @@ class ScheduleBuilder:
             curr_preferred_times += EVENING if habit.evening_preferred else []
             curr_preferred_times += NIGHT if habit.night_preferred else []
 
-            preferred_times.append(curr_preferred_times)
+            preferred_times += [curr_preferred_times for _ in range(habit.frequency)]
+
+        # Get daily habit instances
+        daily_items = []
+        for habit in daily_habits:
+            daily_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT)] * habit.frequency
 
         # Get habit sessions
-        self.schedule.schedule_items += schedule_daily_items(
-            time_blocks,
-            [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT) for habit in daily_habits],
-            preferred_times,
-            preferred_spacing
-        )
+        self.schedule.schedule_items += schedule_daily_items(time_blocks, daily_items, preferred_times, preferred_spacing)
 
         self.schedule.requires_habit_refresh = False
 
@@ -301,8 +301,7 @@ class WeeklyScheduleBuilder:
                 curr_preferred_times += get_weekly_preferred_times(EVENING) if habit.evening_preferred else []
                 curr_preferred_times += get_weekly_preferred_times(NIGHT) if habit.night_preferred else []
 
-                for _ in range(habit.frequency):
-                    preferred_times.append(curr_preferred_times)
+                preferred_times += [curr_preferred_times for _ in range(habit.frequency)]
 
             # Get weekly habit instances
             weekly_items = []
