@@ -50,8 +50,8 @@ class ScheduleRepository(SQLAlchemyAsyncRepository[Schedule]):
             # Create schedules for each day of the week
             day_time_delta = timedelta(days=1)
             schedule_date_weekday = schedule_date.weekday()
-            days = [schedule_date + (i - schedule_date_weekday) * day_time_delta for i in range(7)]
-            schedules = [Schedule(user_id=user.id, date=day, requires_sleep_refresh=True, requires_event_refresh=True, requires_habit_refresh=True, requires_work_refresh=True) for day in days]
+            days = tuple(schedule_date + (i - schedule_date_weekday) * day_time_delta for i in range(7))
+            schedules = tuple(Schedule(user_id=user.id, date=day, requires_sleep_refresh=True, requires_event_refresh=True, requires_habit_refresh=True, requires_work_refresh=True) for day in days)
 
         # Generate weekly schedule
         schedule_builder = WeeklyScheduleBuilder(schedules)

@@ -3,6 +3,7 @@ from math import floor, ceil
 from typing import Optional, Literal, Generator
 from uuid import UUID
 from itertools import chain
+from collections.abc import Sequence
 
 from litestar.status_codes import HTTP_409_CONFLICT
 from litestar.exceptions import ClientException
@@ -106,10 +107,10 @@ def backtrack(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, p
         for k, v in original_variable_domains.items():
             csp.variable_domains[k] = list(v)
 
-def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[ScheduleItemDetails], preferred_times: list[list[TimeBlock]], preferred_spacing: int) -> list[ScheduleItem]:    
+def schedule_daily_items(time_blocks: Sequence[TimeBlock], daily_items: Sequence[ScheduleItemDetails], preferred_times: Sequence[Sequence[TimeBlock]], preferred_spacing: int) -> list[ScheduleItem]:    
     # Initialize starting domain
     seconds_per_interval = 60 * 15
-    num_intervals = floor(86400 / seconds_per_interval)
+    num_intervals = floor(SECONDS_PER_DAY / seconds_per_interval)
     domain = range(num_intervals)
     start_intervals = []
     for time_block in time_blocks:
@@ -163,7 +164,7 @@ def schedule_daily_items(time_blocks: list[TimeBlock], daily_items: list[Schedul
     else:
         raise ClientException(detail="Could not find time slots for daily items", status_code=HTTP_409_CONFLICT)
 
-def schedule_weekly_items(time_blocks: list[TimeBlock], weekly_items: list[ScheduleItemDetails], preferred_times: list[list[TimeBlock]], preferred_spacing: int) -> list[list[ScheduleItem]]:
+def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequence[ScheduleItemDetails], preferred_times: Sequence[Sequence[TimeBlock]], preferred_spacing: int) -> list[list[ScheduleItem]]:
     # Initialize starting domain
     seconds_per_interval = 60 * 15
     num_intervals = floor(SECONDS_PER_DAY * DAYS_PER_WEEK / seconds_per_interval)

@@ -13,6 +13,7 @@ from datetime import time, date, datetime, timedelta
 from pytz import timezone
 from math import floor
 from copy import deepcopy
+from collections.abc import Sequence
 
 # Time preference constants
 MORNING = [(6 * 3600, 12 * 3600)]                   # 6am - 12pm
@@ -55,10 +56,10 @@ def get_schedule_time_blocks(schedule: Schedule) -> list[TimeBlock]:
         for schedule_item in schedule.schedule_items
     ]
 
-def get_events_for_the_day(event_date: date, events: list[Event], timezone_format: timezone) -> list[Event]:
+def get_events_for_the_day(event_date: date, events: Sequence[Event], timezone_format: timezone) -> tuple[Event, ...]:
     event_date_start_time = convert_to_utc(timezone_format, datetime(event_date.year, event_date.month, event_date.day))
     event_date_end_time = event_date_start_time + timedelta(days=1)
-    return [event for event in events if event.end_time > event_date_start_time and event.start_time < event_date_end_time]
+    return tuple(event for event in events if event.end_time > event_date_start_time and event.start_time < event_date_end_time)
 
 def requires_refresh(schedule: Schedule, timezone_str: str) -> bool:
     timezone_change = (timezone_str != schedule.timezone)
@@ -74,7 +75,7 @@ async def requires_week_refresh(schedule: Schedule, timezone_str: str, user: Use
     return (schedule.requires_habit_refresh or (event_exists and timezone_change)) \
         and (await habits_repo.exists(user_id=user.id, repeat_interval=RepeatIntervalEnum.WEEKLY))
 
-def get_weekly_preferred_times(daily_preferred_times: list[tuple[int, int]]) -> list[tuple[int, int]]:
+def get_weekly_preferred_times(daily_preferred_times: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
     weekly_preferred_times = []
     for preferred_times in daily_preferred_times:
         weekly_preferred_times += [(preferred_times[0] + i * 86400, preferred_times[1] + i * 86400) for i in range(7)]
@@ -133,7 +134,7 @@ class ScheduleBuilder:
         self.schedule.timezone = str(timezone_format)
         self.schedule.requires_event_refresh = False
 
-    def schedule_habits(self, daily_habits: list[Habit]) -> None:
+    def schedule_habits(self, daily_habits: Sequence[Habit]) -> None:
         # Remove previous habit sessions
         self.schedule.schedule_items = [
             schedule_item for schedule_item in self.schedule.schedule_items
@@ -196,9 +197,9 @@ class ScheduleBuilder:
         self.schedule.requires_work_refresh = False
 
 class WeeklyScheduleBuilder:
-    schedules: list[Schedule]
+    schedules: Sequence[Schedule]
 
-    def __init__(self, schedules: list[Schedule]) -> None:
+    def __init__(self, schedules: Sequence[Schedule]) -> None:
         self.schedules = schedules
 
     def reset(self) -> None:
@@ -260,9 +261,9 @@ class WeeklyScheduleBuilder:
                 schedule.timezone = str(timezone_format)
                 schedule.requires_event_refresh = False
 
-    def schedule_habits(self, habits: list[Habit]) -> None:
-        daily_habits = [habit for habit in habits if habit.repeat_interval == RepeatIntervalEnum.DAILY]
-        weekly_habits = [habit for habit in habits if habit.repeat_interval == RepeatIntervalEnum.WEEKLY]
+    def schedule_habits(self, habits: Sequence[Habit]) -> None:
+        daily_habits = tuple(habit for habit in habits if habit.repeat_interval == RepeatIntervalEnum.DAILY)
+        weekly_habits = tuple(habit for habit in habits if habit.repeat_interval == RepeatIntervalEnum.WEEKLY)
 
         # Schedule daily habits
         schedule_builder = ScheduleBuilder(self.schedules[0])
@@ -283,7 +284,7 @@ class WeeklyScheduleBuilder:
                 ]
 
             # Get occupied timeblocks
-            schedule_time_blocks = [get_schedule_time_blocks(schedule) for schedule in self.schedules]
+            schedule_time_blocks = tuple(get_schedule_time_blocks(schedule) for schedule in self.schedules)
             for i, daily_time_blocks in enumerate(schedule_time_blocks):
                 for j, (time_block_start, time_block_end) in enumerate(daily_time_blocks):
                     daily_time_blocks[j] = (time_block_start + i * 86400, time_block_end + i * 86400)
