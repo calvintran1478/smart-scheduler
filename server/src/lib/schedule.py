@@ -7,13 +7,16 @@ from models.event import Event
 from domain.users.preferences.repositories import PreferenceRepository
 from domain.users.events.repositories import EventRepository
 from domain.users.habits.repositories import HabitRepository
-from lib.time import convert_to_utc
+from lib.time import convert_to_utc, get_time_difference
 from lib.constraint import TimeBlock, schedule_daily_items, schedule_weekly_items
 from datetime import time, date, datetime, timedelta
 from pytz import timezone
 from math import floor
 from copy import deepcopy
 from collections.abc import Sequence
+from typing import Optional
+
+type ScheduleItemDetails = tuple[str, int, ScheduleItemTypeEnum, bool]
 
 # Time preference constants
 MORNING = [(6 * 3600, 12 * 3600)]                   # 6am - 12pm
@@ -81,6 +84,60 @@ def get_weekly_preferred_times(daily_preferred_times: Sequence[tuple[int, int]])
         weekly_preferred_times += [(preferred_times[0] + i * 86400, preferred_times[1] + i * 86400) for i in range(7)]
     return weekly_preferred_times
 
+def remove_schedule_items_by_type(schedule: Schedule, schedule_item_type: ScheduleItemTypeEnum, names: Optional[Sequence[str]] = None) -> tuple[tuple[ScheduleItem, ...], tuple[ScheduleItem, ...]]:
+    # Keep track of schedule items to be removed
+    locked_schedule_items = tuple(
+        schedule_item for schedule_item in schedule.schedule_items
+        if schedule_item.schedule_item_type == schedule_item_type and schedule_item.locked and (names == None or schedule_item.name in names)
+    )
+    non_locked_schedule_items = tuple(
+        schedule_item for schedule_item in schedule.schedule_items
+        if schedule_item.schedule_item_type == schedule_item_type and not schedule_item.locked and (names == None or schedule_item.name in names)
+    )
+
+    # Remove schedule items from schedule
+    schedule.schedule_items = [
+        schedule_item for schedule_item in schedule.schedule_items
+        if schedule_item.schedule_item_type != schedule_item_type or (names != None and schedule_item.name not in names)
+    ]
+
+    return locked_schedule_items, non_locked_schedule_items
+
+def get_previous_daily_items(locked_schedule_items: Sequence[ScheduleItem], non_locked_schedule_items: Sequence[ScheduleItem]) -> list[ScheduleItemDetails]:
+    return [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, True) for schedule_item in locked_schedule_items] + \
+        [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, False) for schedule_item in non_locked_schedule_items]
+
+def remove_weekly_habit_sessions(schedules: Sequence[Schedule], weekly_habit_names: Sequence[str]) -> tuple[list[tuple[ScheduleItem, ...]], list[tuple[ScheduleItem, ...]]]:
+    locked_schedule_items = []
+    non_locked_schedule_items = []
+
+    for schedule in schedules:
+        # Keep track of schedules to remove
+        weekly_habit_sessions = tuple(
+            schedule_item for schedule_item in schedule.schedule_items
+            if schedule_item.schedule_item_type == ScheduleItemTypeEnum.HABIT and schedule_item.name in weekly_habit_names
+        )
+
+        locked_schedule_items.append(
+            tuple(
+                schedule_item for schedule_item in weekly_habit_sessions if schedule_item.locked
+            )
+        )
+
+        non_locked_schedule_items.append(
+            tuple(
+                schedule_item for schedule_item in weekly_habit_sessions if not schedule_item.locked
+            )
+        )
+
+        # Remove weekly habit sessions from schedule
+        schedule.schedule_items = [
+            schedule_item for schedule_item in schedule.schedule_items
+            if schedule_item.schedule_item_type != ScheduleItemTypeEnum.HABIT or schedule_item.name not in weekly_habit_names
+        ]
+
+    return locked_schedule_items, non_locked_schedule_items
+
 class ScheduleBuilder:
     schedule: Schedule
 
@@ -136,32 +193,35 @@ class ScheduleBuilder:
 
     def schedule_habits(self, daily_habits: Sequence[Habit]) -> None:
         # Remove previous habit sessions
-        self.schedule.schedule_items = [
-            schedule_item for schedule_item in self.schedule.schedule_items
-            if schedule_item.schedule_item_type != ScheduleItemTypeEnum.HABIT
-        ]
+        daily_habit_names = tuple(habit.name for habit in daily_habits)
+        locked_habit_sessions, non_locked_habit_sessions = remove_schedule_items_by_type(self.schedule, ScheduleItemTypeEnum.HABIT, daily_habit_names)
+
+        # Get daily habit instances
+        daily_items = [item for item in get_previous_daily_items(locked_habit_sessions, non_locked_habit_sessions) if item[0] in daily_habit_names]
+
+        # Add missing habit sessions
+        for habit in daily_habits:
+            num_habit_instances = sum((1 if daily_item[0] == habit.name else 0) for daily_item in daily_items)
+            num_habit_instances_to_add = max(0, habit.frequency - num_habit_instances)
+            daily_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False)] * num_habit_instances_to_add
+
+        # Get preferred times
+        preferred_times = []
+        for i, daily_item in enumerate(daily_items):
+            habit = next(habit for habit in daily_habits if habit.name == daily_item[0])
+            curr_preferred_times = get_time_blocks(locked_habit_sessions[i].start_time, locked_habit_sessions[i].end_time) if (i < len(locked_habit_sessions)) else []
+            curr_preferred_times += MORNING if habit.morning_preferred else []
+            curr_preferred_times += AFTERNOON if habit.afternoon_preferred else []
+            curr_preferred_times += EVENING if habit.evening_preferred else []
+            curr_preferred_times += NIGHT if habit.night_preferred else []
+
+            preferred_times.append(curr_preferred_times)
 
         # Get occupied timeblocks
         time_blocks = get_schedule_time_blocks(self.schedule)
 
         # Preferred break length
         preferred_spacing = 3600 # Default one hour spacing for now
-
-        # Get preferred times
-        preferred_times = []
-        for habit in daily_habits:
-            curr_preferred_times = []
-            curr_preferred_times += MORNING if habit.morning_preferred else []
-            curr_preferred_times += AFTERNOON if habit.afternoon_preferred else []
-            curr_preferred_times += EVENING if habit.evening_preferred else []
-            curr_preferred_times += NIGHT if habit.night_preferred else []
-
-            preferred_times += [curr_preferred_times for _ in range(habit.frequency)]
-
-        # Get daily habit instances
-        daily_items = []
-        for habit in daily_habits:
-            daily_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT)] * habit.frequency
 
         # Get habit sessions
         self.schedule.schedule_items += schedule_daily_items(time_blocks, daily_items, preferred_times, preferred_spacing)
@@ -170,29 +230,39 @@ class ScheduleBuilder:
 
     def schedule_work_sessions(self, preference: Preference) -> None:
         # Remove previous work sessions
-        self.schedule.schedule_items = [
-            schedule_item for schedule_item in self.schedule.schedule_items
-            if schedule_item.schedule_item_type != ScheduleItemTypeEnum.FOCUS_SESSION
+        locked_focus_sessions, non_locked_focus_sessions = remove_schedule_items_by_type(self.schedule, ScheduleItemTypeEnum.FOCUS_SESSION)
+
+        # Get daily items
+        daily_items = get_previous_daily_items(locked_focus_sessions, non_locked_focus_sessions)
+
+        # Add missing focus sessions
+        min_focus_sessions = 4
+        num_focus_sessions_to_add = max(0, min_focus_sessions - (len(locked_focus_sessions) + len(non_locked_focus_sessions)))
+        daily_items += [("Work session", 3600, ScheduleItemTypeEnum.FOCUS_SESSION, False)] * num_focus_sessions_to_add
+
+        # Get default best focus times based on preference
+        default_best_focus_times = []
+        if (preference != None):
+            for preferred_time_interval in reversed(preference.best_focus_times):
+                default_best_focus_times += get_time_blocks(preferred_time_interval.start_time, preferred_time_interval.end_time)
+
+        # Prioritize previous user chosen values
+        locked_best_focus_times = [
+            get_time_blocks(focus_session.start_time, focus_session.end_time) + default_best_focus_times
+            for focus_session in locked_focus_sessions
         ]
+
+        non_locked_best_focus_times = [default_best_focus_times] * (len(non_locked_focus_sessions) + num_focus_sessions_to_add)
+        best_focus_times = locked_best_focus_times + non_locked_best_focus_times
 
         # Get occupied timeblocks
         time_blocks = get_schedule_time_blocks(self.schedule) + get_time_blocks(preference.end_of_work_day, preference.start_of_work_day)
 
-        # Get best focus times and preferred break length
-        best_focus_times = []
-        preferred_break_length = 0
-        if (preference != None):
-            preferred_break_length = preference.break_length * 60
-            for preferred_time_interval in reversed(preference.best_focus_times):
-                best_focus_times += get_time_blocks(preferred_time_interval.start_time, preferred_time_interval.end_time)
+        # Preferred break length
+        preferred_break_length = preference.break_length * 60 if (preference != None) else 0
 
         # Get work sessions
-        self.schedule.schedule_items += schedule_daily_items(
-            time_blocks,
-            [("Work session", 3600, ScheduleItemTypeEnum.FOCUS_SESSION) for i in range(4)],
-            [best_focus_times for i in range(4)],
-            preferred_break_length
-        )
+        self.schedule.schedule_items += schedule_daily_items(time_blocks, daily_items, best_focus_times, preferred_break_length)
 
         self.schedule.requires_work_refresh = False
 
@@ -222,7 +292,7 @@ class WeeklyScheduleBuilder:
                 if (schedule.requires_sleep_refresh):
                     # Remove previous sleep hours
                     schedule.schedule_items = [
-                        schedule_item for schedule in schedule.schedule_items
+                        schedule_item for schedule_item in schedule.schedule_items
                         if schedule_item.schedule_item_type != ScheduleItemTypeEnum.SLEEP
                     ]
 
@@ -277,11 +347,52 @@ class WeeklyScheduleBuilder:
         if (num_weekly_habit_instances != 0):
             # Remove previous weekly habit sessions
             weekly_habit_names = tuple(habit.name for habit in weekly_habits)
-            for schedule in self.schedules:
-                schedule.schedule_items = [
-                    schedule_item for schedule_item in schedule.schedule_items
-                    if schedule_item.schedule_item_type != ScheduleItemTypeEnum.HABIT or schedule_item.name not in weekly_habit_names
-                ]
+            locked_weekly_habit_sessions, non_locked_weekly_habit_sessions = remove_weekly_habit_sessions(self.schedules, weekly_habit_names)
+
+            # Get weekly habit instances
+            locked_weekly_items = {}
+            non_locked_weekly_items = {}
+            for i in range(7):
+                locked_weekly_items[i] = [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, True) for schedule_item in locked_weekly_habit_sessions[i]]
+                non_locked_weekly_items[i] = [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, False) for schedule_item in non_locked_weekly_habit_sessions[i]]
+            weekly_items = sum(locked_weekly_items.values(), []) + sum(non_locked_weekly_items.values(), [])
+
+            # Add missing habit sessions
+            for habit in weekly_habits:
+                num_habit_instances = sum((1 if weekly_item[0] == habit.name else 0) for weekly_item in weekly_items)
+                num_habit_instances_to_add = max(0, habit.frequency - num_habit_instances)
+                weekly_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False)] * num_habit_instances_to_add
+
+            # Get number of locked items
+            num_locked_weekly_items = sum((1 if weekly_item[3] else 0) for weekly_item in weekly_items)
+
+            # Get preferred times
+            preferred_times = []
+
+            # Prioritize previous user chosen values
+            for i, locked_habit_sessions in enumerate(locked_weekly_habit_sessions):
+                for habit_session in locked_habit_sessions:
+                    habit = next(habit for habit in weekly_habits if habit.name == habit_session.name)
+                    curr_preferred_times = get_time_blocks(habit_session.start_time, habit_session.end_time)
+                    for j, (time_block_start, time_block_end) in enumerate(curr_preferred_times):
+                        curr_preferred_times[j] = (time_block_start + i * 86400, time_block_end + i * 86400)
+
+                    curr_preferred_times += get_weekly_preferred_times(MORNING) if habit.morning_preferred else []
+                    curr_preferred_times += get_weekly_preferred_times(AFTERNOON) if habit.afternoon_preferred else []
+                    curr_preferred_times += get_weekly_preferred_times(EVENING) if habit.evening_preferred else []
+                    curr_preferred_times += get_weekly_preferred_times(NIGHT) if habit.night_preferred else []
+
+                    preferred_times.append(curr_preferred_times)
+
+            for i, weekly_item in enumerate(weekly_items[num_locked_weekly_items:]):
+                habit = next(habit for habit in weekly_habits if habit.name == weekly_item[0])
+                curr_preferred_times = []
+                curr_preferred_times += get_weekly_preferred_times(MORNING) if habit.morning_preferred else []
+                curr_preferred_times += get_weekly_preferred_times(AFTERNOON) if habit.afternoon_preferred else []
+                curr_preferred_times += get_weekly_preferred_times(EVENING) if habit.evening_preferred else []
+                curr_preferred_times += get_weekly_preferred_times(NIGHT) if habit.night_preferred else []
+
+                preferred_times.append(curr_preferred_times)
 
             # Get occupied timeblocks
             schedule_time_blocks = tuple(get_schedule_time_blocks(schedule) for schedule in self.schedules)
@@ -292,22 +403,6 @@ class WeeklyScheduleBuilder:
 
             # Calculate preferred spacing
             preferred_spacing = floor(86400 * 7 / num_weekly_habit_instances)
-
-            # Get preferred times
-            preferred_times = []
-            for habit in weekly_habits:
-                curr_preferred_times = []
-                curr_preferred_times += get_weekly_preferred_times(MORNING) if habit.morning_preferred else []
-                curr_preferred_times += get_weekly_preferred_times(AFTERNOON) if habit.afternoon_preferred else []
-                curr_preferred_times += get_weekly_preferred_times(EVENING) if habit.evening_preferred else []
-                curr_preferred_times += get_weekly_preferred_times(NIGHT) if habit.night_preferred else []
-
-                preferred_times += [curr_preferred_times for _ in range(habit.frequency)]
-
-            # Get weekly habit instances
-            weekly_items = []
-            for habit in weekly_habits:
-                weekly_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT)] * habit.frequency
 
             # Get habit sessions
             scheduled_weekly_habits = schedule_weekly_items(time_blocks, weekly_items, preferred_times, preferred_spacing)

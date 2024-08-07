@@ -17,7 +17,7 @@ DAYS_PER_WEEK = 7
 FAILURE = "FAILURE"
 
 # Type definitions
-type ScheduleItemDetails = tuple[str, int, ScheduleItemTypeEnum] # name, duration (in seconds), schedule item type
+type ScheduleItemDetails = tuple[str, int, ScheduleItemTypeEnum, bool] # name, duration (in seconds), schedule item type, prioritized
 type TimeBlock = tuple[float, float]
 type Domain = list[int]
 type Relation = callable[[dict[TimeVariable, int]], bool]
@@ -30,11 +30,13 @@ class TimeVariable:
     name: str
     duration: int # in multiples of 15 minutes
     schedule_item_type: ScheduleItemTypeEnum
+    prioritized: bool
     num_preferred_intervals_available: int
 
-    def __init__(self, name: str, duration: int, schedule_item_type: ScheduleItemTypeEnum, num_preferred_intervals_available: int = 0) -> None:
+    def __init__(self, name: str, duration: int, schedule_item_type: ScheduleItemTypeEnum, prioritized: bool = False, num_preferred_intervals_available: int = 0) -> None:
         self.name = name
         self.duration = duration
+        self.prioritized = prioritized
         self.schedule_item_type = schedule_item_type
         self.num_preferred_intervals_available = num_preferred_intervals_available
 
@@ -74,7 +76,7 @@ def forward_check(csp: ConstraintSatisfactionProblem, assignment: PartialSolutio
                 pass
 
 def backtracking_search(csp: ConstraintSatisfactionProblem, preferred_value_spacing: int) -> Optional[Solution]:
-    empty_solution = {k: None for k in sorted(csp.variable_domains.keys(), key=lambda var: (var.duration, -var.num_preferred_intervals_available), reverse=True)}
+    empty_solution = {k: None for k in sorted(csp.variable_domains.keys(), key=lambda var: (var.prioritized, var.duration, -var.num_preferred_intervals_available), reverse=True)}
     return backtrack(csp, empty_solution, preferred_value_spacing)
 
 def backtrack(csp: ConstraintSatisfactionProblem, assignment: PartialSolution, preferred_value_spacing: int) -> Optional[Solution]:
@@ -127,7 +129,7 @@ def schedule_daily_items(time_blocks: Sequence[TimeBlock], daily_items: Sequence
         start_intervals.append(first_interval)
 
     # Create time variables
-    time_variables = tuple(TimeVariable(name, ceil(duration / seconds_per_interval), schedule_item_type) for name, duration, schedule_item_type in daily_items)
+    time_variables = tuple(TimeVariable(name, ceil(duration / seconds_per_interval), schedule_item_type, prioritized) for name, duration, schedule_item_type, prioritized in daily_items)
 
     # Determine domain for each variable
     variable_domains = {}
@@ -138,7 +140,7 @@ def schedule_daily_items(time_blocks: Sequence[TimeBlock], daily_items: Sequence
             variable_domains[time_variable] = [x for x in variable_domains[time_variable] if x not in range(start_interval - time_variable.duration + 1, start_interval)]
 
         # Prioritize values
-        for preferred_time_interval in preferred_times[i]:
+        for preferred_time_interval in reversed(preferred_times[i]):
             first_preferred_interval = floor(preferred_time_interval[0] / seconds_per_interval)
             result = preferred_time_interval[1] / seconds_per_interval
             last_preferred_interval = result - 1 if result.is_integer() else floor(result)
@@ -159,6 +161,7 @@ def schedule_daily_items(time_blocks: Sequence[TimeBlock], daily_items: Sequence
             name=time_variable.name,
             start_time=seconds_to_time_object(start_interval * seconds_per_interval),
             end_time=seconds_to_time_object((start_interval + time_variable.duration) * seconds_per_interval),
+            locked=time_variable.prioritized,
             schedule_item_type=time_variable.schedule_item_type,
         ) for time_variable, start_interval in solution.items()]
     else:
@@ -184,7 +187,7 @@ def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequen
         start_intervals.append(first_interval)
 
     # Create time variables
-    time_variables = tuple(TimeVariable(name, ceil(duration / seconds_per_interval), schedule_item_type) for name, duration, schedule_item_type in weekly_items)
+    time_variables = tuple(TimeVariable(name, ceil(duration / seconds_per_interval), schedule_item_type, prioritized) for name, duration, schedule_item_type, prioritized in weekly_items)
 
     # Determine domain for each variable
     variable_domains = {}
@@ -195,7 +198,7 @@ def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequen
             variable_domains[time_variable] = [x for x in variable_domains[time_variable] if x not in range(start_interval - time_variable.duration + 1, start_interval)]
 
         # Prioritize values
-        for preferred_time_interval in preferred_times[i]:
+        for preferred_time_interval in reversed(preferred_times[i]):
             first_preferred_interval = floor(preferred_time_interval[0] / seconds_per_interval)
             result = preferred_time_interval[1] / seconds_per_interval
             last_preferred_interval = result - 1 if result.is_integer() else floor(result)
@@ -232,6 +235,7 @@ def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequen
                     name=time_variable.name,
                     start_time=seconds_to_time_object(start_day_offset),
                     end_time=seconds_to_time_object(end_day_offset),
+                    locked=time_variable.prioritized,
                     schedule_item_type=time_variable.schedule_item_type
                 ))
 
@@ -242,6 +246,7 @@ def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequen
                     name=time_variable.name,
                     start_time=seconds_to_time_object(start_offset),
                     end_time=seconds_to_time_object(SECONDS_PER_DAY),
+                    locked=time_variable.prioritized,
                     schedule_item_type=time_variable.schedule_item_type
                 ))
 
@@ -252,6 +257,7 @@ def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequen
                         name=time_variable.name,
                         start_time=time(),
                         end_time=seconds_to_time_object(SECONDS_PER_DAY),
+                        locked=time_variable.prioritized,
                         schedule_item_type=time_variable.schedule_item_type
                     ))
                     day += 1
@@ -262,6 +268,7 @@ def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequen
                         name=time_variable.name,
                         start_time=time(),
                         end_time=seconds_to_time_object(end_offset),
+                        locked=time_variable.prioritized,
                         schedule_item_type=time_variable.schedule_item_type
                     ))
 

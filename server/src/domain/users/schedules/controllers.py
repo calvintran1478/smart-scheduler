@@ -86,6 +86,7 @@ class ScheduleController(Controller):
             name=data.name,
             start_time=data.start_time,
             end_time=data.end_time,
+            locked=True,
             schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION
         )
 
@@ -111,6 +112,7 @@ class ScheduleController(Controller):
         for attribute_name, attribute_value in data.__dict__.items():
             if (attribute_value != None):
                 setattr(focus_session, attribute_name, attribute_value)
+        focus_session.locked = True
 
         # Check if new time values are valid
         if (focus_session.start_time > focus_session.end_time):
@@ -153,6 +155,7 @@ class ScheduleController(Controller):
         for attribute_name, attribute_value in data.__dict__.items():
             if (attribute_value != None):
                 setattr(habit_session, attribute_name, attribute_value)
+        habit_session.locked = True
 
         # Check if new time values are valid
         if (habit_session.start_time > habit_session.end_time):
