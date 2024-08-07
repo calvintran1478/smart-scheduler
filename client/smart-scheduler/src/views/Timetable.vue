@@ -8,6 +8,9 @@
               <h2>{{ formatTime(item.start_time) }} - {{ formatTime(item.end_time) }}</h2>
               <p>{{ item.name }} ({{ item.schedule_item_type }})</p>
             </ion-label>
+            <ion-button color="primary" @click="openEditModal(item)">
+              Edit
+            </ion-button>
             <ion-button color="danger" @click="deleteFocusSession(item.schedule_item_id)">
               Delete
             </ion-button>
@@ -38,6 +41,33 @@
             </ion-item>
           </ion-list>
           <ion-button expand="full" @click="addFocusSession">Add Session</ion-button>
+        <edit-modal v-if="isEditModalOpen" @close="closeEditModal">
+        <ion-header>
+          <ion-toolbar>
+            <ion-title>Edit Focus Session</ion-title>
+            <ion-buttons slot="end">
+              <ion-button @click="closeEditModal">Close</ion-button>
+            </ion-buttons>
+          </ion-toolbar>
+        </ion-header>
+        <ion-content class="ion-padding">
+          <ion-list>
+            <ion-item>
+              <ion-label position="stacked">Session Name</ion-label>
+              <ion-input v-model="editFocusSession.name" placeholder="Enter session name"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">Start Time</ion-label>
+              <ion-input v-model="editFocusSession.start_time" type="time" required></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">End Time</ion-label>
+              <ion-input v-model="editFocusSession.end_time" type="time" required></ion-input>
+            </ion-item>
+          </ion-list>
+          <ion-button expand="full" @click="updateFocusSession">Update Session</ion-button>
+        </ion-content>
+      </edit-modal>
         </ion-content>
       </focus-modal>
       </ion-content>
@@ -87,7 +117,14 @@
           start_time: '',
           end_time: '',
         },
-        isModalOpen: false
+        editFocusSession: {
+          id: '',
+          name: '',
+          start_time: '',
+          end_time: ''
+        },
+        isModalOpen: false,
+        isEditModalOpen: false,
       };
     },
     methods: {
@@ -97,6 +134,18 @@
       closeModal() {
         this.isModalOpen=false;
       },
+      openEditModal(item) {
+      this.editFocusSession = { 
+        id: item.schedule_item_id, 
+        name: item.name, 
+        start_time: item.start_time, 
+        end_time: item.end_time 
+      };
+      this.isEditModalOpen = true;
+    },
+    closeEditModal() {
+      this.isEditModalOpen = false;
+    },
       async fetchSchedule() {
         const date = format(new Date(), 'yyyy-MM-dd');
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -183,6 +232,52 @@
         }
       } catch (error) {
         console.error('Error adding focus session:', error);
+      }
+    },
+    async updateFocusSession() {
+      const date = format(new Date(), 'yyyy-MM-dd');
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+
+      const requestBody = {
+        name: this.editFocusSession.name,
+        start_time: this.editFocusSession.start_time,
+        end_time: this.editFocusSession.end_time
+      };
+
+      try {
+        const response = await fetch(`http://localhost:8000/api/v1/users/schedules/${date}/focus-sessions/${this.editFocusSession.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: "include",
+          body: JSON.stringify(requestBody)
+        });
+
+        if (response.status === 204) {
+          this.scheduleItems = this.scheduleItems.map(item => 
+            item.schedule_item_id === this.editFocusSession.id 
+              ? { ...item, ...requestBody } 
+              : item
+          );
+          console.log('Focus session updated:', this.editFocusSession);
+          this.closeEditModal();
+        } else if (response.status === 401) {
+          console.error('Unauthorized');
+        } else if (response.status === 404) {
+          console.error('Focus session not found');
+        } else if (response.status === 409) {
+          console.error('New time overlaps with existing schedule');
+        } else {
+          console.error('Failed to update focus session:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error updating focus session:', error);
       }
     },
     async deleteFocusSession(id) {
