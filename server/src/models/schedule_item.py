@@ -18,6 +18,7 @@ class ScheduleItem(UUIDBase):
     name: Mapped[str]
     start_time: Mapped[time]
     end_time: Mapped[time]
+    locked: Mapped[bool] = mapped_column(default=False)
     schedule_item_type: Mapped[str] = mapped_column(Enum(ScheduleItemTypeEnum, name="schedule_item_type"))
     schedule_id: Mapped[int] = mapped_column(ForeignKey("schedules.id", ondelete="CASCADE", onupdate="CASCADE"))
 
