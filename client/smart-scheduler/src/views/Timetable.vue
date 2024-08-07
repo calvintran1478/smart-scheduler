@@ -10,6 +10,33 @@
             </ion-label>
           </ion-item>
         </ion-list>
+        <ion-button @click="openModal">Add Focus Session</ion-button>
+      <focus-modal v-if="isModalOpen" @close="closeModal">
+        <ion-header>
+          <ion-toolbar>
+            <ion-title>Add Focus Session</ion-title>
+            <ion-buttons slot="end">
+            </ion-buttons>
+          </ion-toolbar>
+        </ion-header>
+        <ion-content class="ion-padding">
+          <ion-list>
+            <ion-item>
+              <ion-label position="stacked">Session Name</ion-label>
+              <ion-input v-model="newFocusSession.name" placeholder="Enter session name"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">Start Time</ion-label>
+              <ion-input v-model="newFocusSession.start_time" type="time" required></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">End Time</ion-label>
+              <ion-input v-model="newFocusSession.end_time" type="time" required></ion-input>
+            </ion-item>
+          </ion-list>
+          <ion-button expand="full" @click="addFocusSession">Add Session</ion-button>
+        </ion-content>
+      </focus-modal>
       </ion-content>
     </ion-page>
   </template>
@@ -20,7 +47,14 @@
     IonContent,
     IonList,
     IonItem,
-    IonLabel
+    IonLabel,
+    IonButton,
+    IonModal,
+    IonHeader,
+    IonToolbar,
+    IonTitle,
+    IonButtons,
+    IonInput
   } from "@ionic/vue";
   import { defineComponent } from "vue";
   import { format } from "date-fns";
@@ -33,14 +67,33 @@
       IonList,
       IonItem,
       IonLabel,
+      IonButton,
+      IonModal,
+      IonHeader,
+      IonToolbar,
+      IonTitle,
+      IonButtons,
+      IonInput
     },
     data() {
       return {
         scheduleItems: [],
         refreshed: false,
+        newFocusSession: {
+          name: '',
+          start_time: '',
+          end_time: '',
+        },
+        isModalOpen: false
       };
     },
     methods: {
+      openModal() {
+        this.isModalOpen=true;
+      },
+      closeModal() {
+        this.isModalOpen=false;
+      },
       async fetchSchedule() {
         const date = format(new Date(), 'yyyy-MM-dd');
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -60,6 +113,7 @@
           if (response.status === 200) {
             const data = await response.json();
             this.scheduleItems = data.schedule_items;
+            console.log(data.schedule_items);
           } else if (response.status == 401) {
             // refresh token
             if (!this.refreshed) {
@@ -85,7 +139,49 @@
         date.setHours(hour);
         date.setMinutes(minute);
         return format(date, 'hh:mm a');
+      },
+    async addFocusSession() {
+      const date = format(new Date(), 'yyyy-MM-dd');
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found");
+        return;
       }
+
+      const requestBody = {
+        name: this.newFocusSession.name,
+        start_time: this.newFocusSession.start_time,
+        end_time: this.newFocusSession.end_time
+      };
+
+      try {
+        const response = await fetch(`http://localhost:8000/api/v1/users/schedules/${date}/focus-sessions?timezone=${timezone}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: "include",
+          body: JSON.stringify(requestBody)
+        });
+
+        if (response.status === 201) {
+          const newSession = await response.json();
+          this.scheduleItems.push(newSession);
+          console.log('Focus session added:', newSession);
+          this.closeModal();
+        } else if (response.status === 401) {
+          console.error('Unauthorized');
+        } else if (response.status === 409) {
+          console.error('Time conflict with existing schedule');
+        } else {
+          console.error('Failed to add focus session:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error adding focus session:', error);
+      }
+    }
     },
     mounted() {
       this.fetchSchedule();
@@ -100,6 +196,13 @@
     font-weight: bold;
     text-align: left;
     padding-left: 25px;
+  }
+  ion-button {
+    margin: 20px;
+  }
+
+  ion-modal {
+    --ion-background-color: #ffffff;
   }
   </style>
   
