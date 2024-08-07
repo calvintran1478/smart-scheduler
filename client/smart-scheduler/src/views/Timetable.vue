@@ -8,6 +8,9 @@
               <h2>{{ formatTime(item.start_time) }} - {{ formatTime(item.end_time) }}</h2>
               <p>{{ item.name }} ({{ item.schedule_item_type }})</p>
             </ion-label>
+            <ion-button color="danger" @click="deleteFocusSession(item.schedule_item_id)">
+              Delete
+            </ion-button>
           </ion-item>
         </ion-list>
         <ion-button @click="openModal">Add Focus Session</ion-button>
@@ -181,8 +184,40 @@
       } catch (error) {
         console.error('Error adding focus session:', error);
       }
-    }
     },
+    async deleteFocusSession(id) {
+      const date = format(new Date(), 'yyyy-MM-dd');
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:8000/api/v1/users/schedules/${date}/focus-sessions/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: "include"
+        });
+
+        if (response.status === 204) {
+          this.scheduleItems = this.scheduleItems.filter(item => item.schedule_item_id !== id);
+          console.log('Focus session deleted:', id);
+        } else if (response.status === 401) {
+          console.error('Unauthorized');
+        } else if (response.status === 404) {
+          console.error('Focus session not found');
+        } else {
+          console.error('Failed to delete focus session:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error deleting focus session:', error);
+      }
+    }
+    }, 
     mounted() {
       this.fetchSchedule();
     }
