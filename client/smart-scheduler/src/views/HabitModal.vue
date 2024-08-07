@@ -26,8 +26,6 @@
           <ion-select v-model="repeat_interval" placeholder="Select repeat interval">
             <ion-select-option value="Daily">Daily</ion-select-option>
             <ion-select-option value="Weekly">Weekly</ion-select-option>
-            <ion-select-option value="Monthly">Monthly</ion-select-option>
-            <ion-select-option value="Yearly">Yearly</ion-select-option>
           </ion-select>
         </ion-item>
         <ion-item>
