@@ -10,6 +10,7 @@ from models.event import Event
 from models.exception_date import ExceptionDate
 from models.updated_event_instance import UpdatedEventInstance
 from lib.event import get_event_from_updated_event_instance
+from lib.time import SECONDS_PER_DAY, SECONDS_PER_WEEK, SECONDS_PER_YEAR
 
 class ExceptionDateRepository(SQLAlchemyAsyncRepository[ExceptionDate]):
     """Exception Date repository"""
@@ -106,11 +107,11 @@ class EventRepository(SQLAlchemyAsyncRepository[Event]):
             tau = 0
             match event.repeat_rule:
                 case "DAILY":
-                    tau = 86400
+                    tau = SECONDS_PER_DAY
                 case "WEEKLY":
-                    tau = 604800
+                    tau = SECONDS_PER_WEEK
                 case "YEARLY":
-                    tau = 31536000
+                    tau = SECONDS_PER_YEAR
 
             # Get instance count
             instance_count = floor((event.until.timestamp() - event.start_time.timestamp()) / tau) + 1 if (event.until != None) else -1

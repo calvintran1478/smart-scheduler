@@ -2,6 +2,12 @@ from pytz import utc, timezone
 from datetime import time, datetime
 from math import floor
 
+# Constants
+SECONDS_PER_DAY = 86400
+SECONDS_PER_WEEK = 604800
+SECONDS_PER_YEAR = 31536000
+DAYS_PER_WEEK = 7
+
 def convert_to_utc(tz: timezone, dt: datetime) -> datetime:
     return tz.normalize(tz.localize(dt)).astimezone(utc)
 
@@ -19,5 +25,5 @@ def get_time_difference(start_time: time, end_time: time) -> int:
     start = start_time.hour * 3600 + start_time.minute * 60 + start_time.second
     end = end_time.hour * 3600 + end_time.minute * 60 + end_time.second
     if (end_time < start_time):
-        end += 86400
+        end += SECONDS_PER_DAY
     return end - start

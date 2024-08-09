@@ -9,11 +9,9 @@ from litestar.status_codes import HTTP_409_CONFLICT
 from litestar.exceptions import ClientException
 
 from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
-from lib.time import seconds_to_time_object
+from lib.time import seconds_to_time_object, SECONDS_PER_DAY, DAYS_PER_WEEK
 
 # Constants
-SECONDS_PER_DAY = 86400
-DAYS_PER_WEEK = 7
 FAILURE = "FAILURE"
 
 # Type definitions

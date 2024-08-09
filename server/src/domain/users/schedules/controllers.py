@@ -18,10 +18,10 @@ from domain.users.events.dependencies import provide_events_repo
 from domain.users.events.validators import check_timezone
 from domain.users.habits.repositories import HabitRepository
 from domain.users.habits.dependencies import provide_habits_repo
-from lib.time import convert_to_utc, seconds_to_time_object
+from lib.time import convert_to_utc, seconds_to_time_object, get_time_difference, SECONDS_PER_DAY
 from lib.schedule import requires_refresh, requires_week_refresh
 
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 class ScheduleController(Controller):
@@ -151,16 +151,20 @@ class ScheduleController(Controller):
         except StopIteration:
             raise NotFoundException(detail="Habit session not found")
 
+        # Get habit duration
+        duration = get_time_difference(habit_session.start_time, habit_session.end_time)
+
+        # Check if habit session is contained within a single day
+        end_time_offset = data.start_time.hour * 3600 + data.start_time.minute * 60 + data.start_time.second + duration
+        if (end_time_offset > SECONDS_PER_DAY):
+            raise ClientException(detail="Habit session must be contained within a single day")
+
         # Update habit session
-        for attribute_name, attribute_value in data.__dict__.items():
-            if (attribute_value != None):
-                setattr(habit_session, attribute_name, attribute_value)
+        habit_session.start_time = data.start_time
+        habit_session.end_time = seconds_to_time_object(end_time_offset)
         habit_session.locked = True
 
         # Check if new time values are valid
-        if (habit_session.start_time > habit_session.end_time):
-            raise ClientException(detail="Start time must come before end time")
-
         if any(schedule_item.start_time < habit_session.end_time and schedule_item.end_time > habit_session.start_time and schedule_item.id != habit_session.id for schedule_item in schedule.schedule_items):
             raise ClientException(detail="New times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
 

@@ -24,5 +24,4 @@ class UpdateFocusSessionInput(BaseModel):
     end_time: Optional["datetime.time"] = None
 
 class UpdateHabitSessionInput(BaseModel):
-    start_time: Optional["datetime.time"] = None
-    end_time: Optional["datetime.time"] = None
+    start_time: time

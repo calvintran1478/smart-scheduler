@@ -7,7 +7,7 @@ from models.event import Event
 from domain.users.preferences.repositories import PreferenceRepository
 from domain.users.events.repositories import EventRepository
 from domain.users.habits.repositories import HabitRepository
-from lib.time import convert_to_utc, get_time_difference
+from lib.time import convert_to_utc, get_time_difference, SECONDS_PER_DAY, DAYS_PER_WEEK
 from lib.constraint import TimeBlock, schedule_daily_items, schedule_weekly_items
 from datetime import time, date, datetime, timedelta
 from pytz import timezone
@@ -32,7 +32,7 @@ def get_time_blocks(start_time: time, end_time: time) -> list[TimeBlock]:
     # Add 1 or 2 timeblocks depending if the time interval crosses over midnight
     time_blocks = []
     if (start_timestamp > end_timestamp):
-        time_blocks.append((start_timestamp, 24 * 3600))
+        time_blocks.append((start_timestamp, SECONDS_PER_DAY))
         if (end_timestamp != 0):
             time_blocks.append((0, end_timestamp))
     else:
@@ -81,7 +81,7 @@ async def requires_week_refresh(schedule: Schedule, timezone_str: str, user: Use
 def get_weekly_preferred_times(daily_preferred_times: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
     weekly_preferred_times = []
     for preferred_times in daily_preferred_times:
-        weekly_preferred_times += [(preferred_times[0] + i * 86400, preferred_times[1] + i * 86400) for i in range(7)]
+        weekly_preferred_times += [(preferred_times[0] + i * SECONDS_PER_DAY, preferred_times[1] + i * SECONDS_PER_DAY) for i in range(DAYS_PER_WEEK)]
     return weekly_preferred_times
 
 def remove_schedule_items_by_type(schedule: Schedule, schedule_item_type: ScheduleItemTypeEnum, names: Optional[Sequence[str]] = None) -> tuple[tuple[ScheduleItem, ...], tuple[ScheduleItem, ...]]:
@@ -304,7 +304,7 @@ class WeeklyScheduleBuilder:
         # Get events for the week
         first_date = min(schedule.date for schedule in self.schedules)
         start_time = convert_to_utc(timezone_format, datetime(first_date.year, first_date.month, first_date.day))
-        end_time = start_time + timedelta(days=7)
+        end_time = start_time + timedelta(days=DAYS_PER_WEEK)
         events = await events_repo.get_events_in_range(user.id, start_time, end_time, timezone_format)
 
         # Add corresponding event items to each day
@@ -352,7 +352,7 @@ class WeeklyScheduleBuilder:
             # Get weekly habit instances
             locked_weekly_items = {}
             non_locked_weekly_items = {}
-            for i in range(7):
+            for i in range(DAYS_PER_WEEK):
                 locked_weekly_items[i] = [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, True) for schedule_item in locked_weekly_habit_sessions[i]]
                 non_locked_weekly_items[i] = [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, False) for schedule_item in non_locked_weekly_habit_sessions[i]]
             weekly_items = sum(locked_weekly_items.values(), []) + sum(non_locked_weekly_items.values(), [])
@@ -375,7 +375,7 @@ class WeeklyScheduleBuilder:
                     habit = next(habit for habit in weekly_habits if habit.name == habit_session.name)
                     curr_preferred_times = get_time_blocks(habit_session.start_time, habit_session.end_time)
                     for j, (time_block_start, time_block_end) in enumerate(curr_preferred_times):
-                        curr_preferred_times[j] = (time_block_start + i * 86400, time_block_end + i * 86400)
+                        curr_preferred_times[j] = (time_block_start + i * SECONDS_PER_DAY, time_block_end + i * SECONDS_PER_DAY)
 
                     curr_preferred_times += get_weekly_preferred_times(MORNING) if habit.morning_preferred else []
                     curr_preferred_times += get_weekly_preferred_times(AFTERNOON) if habit.afternoon_preferred else []
@@ -398,11 +398,11 @@ class WeeklyScheduleBuilder:
             schedule_time_blocks = tuple(get_schedule_time_blocks(schedule) for schedule in self.schedules)
             for i, daily_time_blocks in enumerate(schedule_time_blocks):
                 for j, (time_block_start, time_block_end) in enumerate(daily_time_blocks):
-                    daily_time_blocks[j] = (time_block_start + i * 86400, time_block_end + i * 86400)
+                    daily_time_blocks[j] = (time_block_start + i * SECONDS_PER_DAY, time_block_end + i * SECONDS_PER_DAY)
             time_blocks = sum(schedule_time_blocks, [])
 
             # Calculate preferred spacing
-            preferred_spacing = floor(86400 * 7 / num_weekly_habit_instances)
+            preferred_spacing = floor(SECONDS_PER_DAY * DAYS_PER_WEEK / num_weekly_habit_instances)
 
             # Get habit sessions
             scheduled_weekly_habits = schedule_weekly_items(time_blocks, weekly_items, preferred_times, preferred_spacing)
