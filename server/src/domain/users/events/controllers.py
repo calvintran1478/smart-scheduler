@@ -17,7 +17,7 @@ from domain.users.events.hooks import after_event_get_request
 from domain.users.events.validators import validate_new_times, validate_event_query_parameters
 from domain.users.schedules.repositories import ScheduleRepository
 from domain.users.schedules.dependencies import provide_schedules_repo
-from lib.time import convert_to_utc
+from lib.time import convert_to_utc, END_OF_DAY
 from lib.event import get_updated_event_instance_from_event
 
 from typing import Optional
@@ -41,7 +41,7 @@ class EventController(Controller):
             start_time=convert_to_utc(data.timezone, data.start_time),
             end_time=convert_to_utc(data.timezone, data.end_time),
             repeat_rule=data.repeat_rule,
-            until=convert_to_utc(data.timezone, datetime.combine(data.until, time(23, 59, 59))) if (data.until != None) else None,
+            until=convert_to_utc(data.timezone, datetime.combine(data.until, END_OF_DAY)) if (data.until != None) else None,
             description=data.description,
             location=data.location,
         )

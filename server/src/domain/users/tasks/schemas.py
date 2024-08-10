@@ -4,13 +4,13 @@ from typing_extensions import Self
 from datetime import date, time
 from litestar.exceptions import ClientException
 from domain.users.tasks.validators import TimeZone
-from lib.time import convert_to_utc
+from lib.time import convert_to_utc, END_OF_DAY
 import datetime
 
 class CreateTaskInput(BaseModel):
     name: str
     deadline_date: date
-    deadline_time: Optional["datetime.time"] = time(23, 59, 59)
+    deadline_time: Optional["datetime.time"] = END_OF_DAY
     time_estimate: time
     timezone: TimeZone
     tag: Optional[str] = None

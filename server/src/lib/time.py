@@ -7,6 +7,8 @@ SECONDS_PER_DAY = 86400
 SECONDS_PER_WEEK = 604800
 SECONDS_PER_YEAR = 31536000
 DAYS_PER_WEEK = 7
+START_OF_DAY = time()
+END_OF_DAY = time(23, 59, 59)
 
 def convert_to_utc(tz: timezone, dt: datetime) -> datetime:
     return tz.normalize(tz.localize(dt)).astimezone(utc)
@@ -14,7 +16,7 @@ def convert_to_utc(tz: timezone, dt: datetime) -> datetime:
 def seconds_to_time_object(seconds: int) -> time:
     hour = floor(seconds / 3600)
     if hour == 24:
-        return time(23, 59, 59)
+        return END_OF_DAY
     seconds %= 3600
     minute = floor(seconds / 60)
     seconds %= 60

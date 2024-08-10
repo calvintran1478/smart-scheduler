@@ -9,7 +9,7 @@ from litestar.status_codes import HTTP_409_CONFLICT
 from litestar.exceptions import ClientException
 
 from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
-from lib.time import seconds_to_time_object, SECONDS_PER_DAY, DAYS_PER_WEEK
+from lib.time import seconds_to_time_object, SECONDS_PER_DAY, DAYS_PER_WEEK, START_OF_DAY
 
 # Constants
 FAILURE = "FAILURE"
@@ -253,7 +253,7 @@ def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequen
                 while (day < end_day):
                     schedule_items[day].append(ScheduleItem(
                         name=time_variable.name,
-                        start_time=time(),
+                        start_time=START_OF_DAY,
                         end_time=seconds_to_time_object(SECONDS_PER_DAY),
                         locked=time_variable.prioritized,
                         schedule_item_type=time_variable.schedule_item_type
@@ -264,7 +264,7 @@ def schedule_weekly_items(time_blocks: Sequence[TimeBlock], weekly_items: Sequen
                 if (end_offset != 0):
                     schedule_items[end_day].append(ScheduleItem(
                         name=time_variable.name,
-                        start_time=time(),
+                        start_time=START_OF_DAY,
                         end_time=seconds_to_time_object(end_offset),
                         locked=time_variable.prioritized,
                         schedule_item_type=time_variable.schedule_item_type

@@ -7,7 +7,7 @@ from typing import Optional
 import pytz
 
 from models.event import Event, RepeatRuleEnum
-from lib.time import convert_to_utc
+from lib.time import convert_to_utc, END_OF_DAY
 
 def check_repeat_rule(repeat_rule: str) -> str:
     normalized_repeat_rule = repeat_rule.upper()
@@ -30,7 +30,7 @@ def validate_new_times(update_data, event: Event) -> tuple[datetime, datetime]:
     new_end_time = convert_to_utc(update_data.timezone, update_data.end_time) \
         if (update_data.end_time != None) else event.end_time
 
-    new_until = convert_to_utc(update_data.timezone, datetime.combine(update_data.until, time(23, 59, 59))) \
+    new_until = convert_to_utc(update_data.timezone, datetime.combine(update_data.until, END_OF_DAY)) \
         if (update_data.until != None) else event.until
 
     # Check for valid times

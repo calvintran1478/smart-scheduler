@@ -7,7 +7,7 @@ from models.event import Event
 from domain.users.preferences.repositories import PreferenceRepository
 from domain.users.events.repositories import EventRepository
 from domain.users.habits.repositories import HabitRepository
-from lib.time import convert_to_utc, get_time_difference, SECONDS_PER_DAY, DAYS_PER_WEEK
+from lib.time import convert_to_utc, get_time_difference, SECONDS_PER_DAY, DAYS_PER_WEEK, START_OF_DAY, END_OF_DAY
 from lib.constraint import TimeBlock, schedule_daily_items, schedule_weekly_items
 from datetime import time, date, datetime, timedelta
 from pytz import timezone
@@ -18,11 +18,23 @@ from typing import Optional
 
 type ScheduleItemDetails = tuple[str, int, ScheduleItemTypeEnum, bool]
 
+# Helper function for creating time constants
+def get_weekly_preferred_times(daily_preferred_times: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
+    weekly_preferred_times = []
+    for preferred_times in daily_preferred_times:
+        weekly_preferred_times += [(preferred_times[0] + i * SECONDS_PER_DAY, preferred_times[1] + i * SECONDS_PER_DAY) for i in range(DAYS_PER_WEEK)]
+    return weekly_preferred_times
+
 # Time preference constants
 MORNING = [(6 * 3600, 12 * 3600)]                   # 6am - 12pm
 AFTERNOON = [(12 * 3600, 18 * 3600)]                # 12pm - 6pm
 EVENING = [(18 * 3600, 21 * 3600)]                  # 6pm - 9pm
 NIGHT = [(21 * 3600, 24 * 3600), (0, 6 * 3600)]     # 9pm - 6am
+
+WEEKLY_MORNING = get_weekly_preferred_times(MORNING)
+WEEKLY_AFTERNOON = get_weekly_preferred_times(AFTERNOON)
+WEEKLY_EVENING = get_weekly_preferred_times(EVENING)
+WEEKLY_NIGHT = get_weekly_preferred_times(NIGHT)
 
 def get_time_blocks(start_time: time, end_time: time) -> list[TimeBlock]:
     # Get second timestamps of each time object from the start of the day
@@ -43,10 +55,9 @@ def get_time_blocks(start_time: time, end_time: time) -> list[TimeBlock]:
 def get_time_obj_blocks(start_time: time, end_time: time) -> list[tuple[time, time]]:
     time_obj_blocks = []
     if (start_time > end_time):
-        time_obj_blocks.append((start_time, time(23, 59, 59)))
-        midnight = time()
-        if (end_time != midnight):
-            time_obj_blocks.append((midnight, end_time))
+        time_obj_blocks.append((start_time, END_OF_DAY))
+        if (end_time != START_OF_DAY):
+            time_obj_blocks.append((START_OF_DAY, end_time))
     else:
         time_obj_blocks.append((start_time, end_time))
 
@@ -77,12 +88,6 @@ async def requires_week_refresh(schedule: Schedule, timezone_str: str, user: Use
 
     return (schedule.requires_habit_refresh or (event_exists and timezone_change)) \
         and (await habits_repo.exists(user_id=user.id, repeat_interval=RepeatIntervalEnum.WEEKLY))
-
-def get_weekly_preferred_times(daily_preferred_times: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
-    weekly_preferred_times = []
-    for preferred_times in daily_preferred_times:
-        weekly_preferred_times += [(preferred_times[0] + i * SECONDS_PER_DAY, preferred_times[1] + i * SECONDS_PER_DAY) for i in range(DAYS_PER_WEEK)]
-    return weekly_preferred_times
 
 def remove_schedule_items_by_type(schedule: Schedule, schedule_item_type: ScheduleItemTypeEnum, names: Optional[Sequence[str]] = None) -> tuple[tuple[ScheduleItem, ...], tuple[ScheduleItem, ...]]:
     # Keep track of schedule items to be removed
@@ -161,8 +166,7 @@ class ScheduleBuilder:
                 name="Sleep",
                 start_time=time_obj_block[0],
                 end_time=time_obj_block[1],
-                schedule_item_type=ScheduleItemTypeEnum.SLEEP,
-                schedule_id=self.schedule.id
+                schedule_item_type=ScheduleItemTypeEnum.SLEEP
             ) for time_obj_block in time_obj_blocks]
 
         self.schedule.requires_sleep_refresh = False
@@ -181,8 +185,8 @@ class ScheduleBuilder:
         self.schedule.schedule_items += [
             ScheduleItem(
                 name=event.summary,
-                start_time=time() if (event.start_time.date() < self.schedule.date) else event.start_time.time(),
-                end_time=time(23, 59, 59) if (event.end_time.date() > self.schedule.date) else event.end_time.time(),
+                start_time=START_OF_DAY if (event.start_time.date() < self.schedule.date) else event.start_time.time(),
+                end_time=END_OF_DAY if (event.end_time.date() > self.schedule.date) else event.end_time.time(),
                 schedule_item_type=ScheduleItemTypeEnum.EVENT,
             ) for event in events
         ]
@@ -321,8 +325,8 @@ class WeeklyScheduleBuilder:
                 schedule.schedule_items += [
                     ScheduleItem(
                         name=event.summary,
-                        start_time=time() if (event.start_time.date() < schedule.date) else event.start_time.time(),
-                        end_time=time(23, 59, 59) if (event.end_time.date() > schedule.date) else event.end_time.time(),
+                        start_time=START_OF_DAY if (event.start_time.date() < schedule.date) else event.start_time.time(),
+                        end_time=END_OF_DAY if (event.end_time.date() > schedule.date) else event.end_time.time(),
                         schedule_item_type=ScheduleItemTypeEnum.EVENT,
                     ) for event in events_for_the_day
                 ]
@@ -377,20 +381,20 @@ class WeeklyScheduleBuilder:
                     for j, (time_block_start, time_block_end) in enumerate(curr_preferred_times):
                         curr_preferred_times[j] = (time_block_start + i * SECONDS_PER_DAY, time_block_end + i * SECONDS_PER_DAY)
 
-                    curr_preferred_times += get_weekly_preferred_times(MORNING) if habit.morning_preferred else []
-                    curr_preferred_times += get_weekly_preferred_times(AFTERNOON) if habit.afternoon_preferred else []
-                    curr_preferred_times += get_weekly_preferred_times(EVENING) if habit.evening_preferred else []
-                    curr_preferred_times += get_weekly_preferred_times(NIGHT) if habit.night_preferred else []
+                    curr_preferred_times += WEEKLY_MORNING if habit.morning_preferred else []
+                    curr_preferred_times += WEEKLY_AFTERNOON if habit.afternoon_preferred else []
+                    curr_preferred_times += WEEKLY_EVENING if habit.evening_preferred else []
+                    curr_preferred_times += WEEKLY_NIGHT if habit.night_preferred else []
 
                     preferred_times.append(curr_preferred_times)
 
             for i, weekly_item in enumerate(weekly_items[num_locked_weekly_items:]):
                 habit = next(habit for habit in weekly_habits if habit.name == weekly_item[0])
                 curr_preferred_times = []
-                curr_preferred_times += get_weekly_preferred_times(MORNING) if habit.morning_preferred else []
-                curr_preferred_times += get_weekly_preferred_times(AFTERNOON) if habit.afternoon_preferred else []
-                curr_preferred_times += get_weekly_preferred_times(EVENING) if habit.evening_preferred else []
-                curr_preferred_times += get_weekly_preferred_times(NIGHT) if habit.night_preferred else []
+                curr_preferred_times += WEEKLY_MORNING if habit.morning_preferred else []
+                curr_preferred_times += WEEKLY_AFTERNOON if habit.afternoon_preferred else []
+                curr_preferred_times += WEEKLY_EVENING if habit.evening_preferred else []
+                curr_preferred_times += WEEKLY_NIGHT if habit.night_preferred else []
 
                 preferred_times.append(curr_preferred_times)
 
