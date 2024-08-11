@@ -152,7 +152,7 @@ class ScheduleBuilder:
     def reset(self) -> None:
         self.schedule.schedule_items.clear()
 
-    def schedule_sleep_hours(self, preference: Preference) -> None:
+    def schedule_sleep_hours(self, preference: Optional[Preference] = None) -> None:
         # Remove previous sleep schedule
         self.schedule.schedule_items = [
             schedule_item for schedule_item in self.schedule.schedule_items
@@ -232,7 +232,7 @@ class ScheduleBuilder:
 
         self.schedule.requires_habit_refresh = False
 
-    def schedule_work_sessions(self, preference: Preference) -> None:
+    def schedule_work_sessions(self, preference: Optional[Preference] = None) -> None:
         # Remove previous work sessions
         locked_focus_sessions, non_locked_focus_sessions = remove_schedule_items_by_type(self.schedule, ScheduleItemTypeEnum.FOCUS_SESSION)
 
@@ -260,7 +260,7 @@ class ScheduleBuilder:
         best_focus_times = locked_best_focus_times + non_locked_best_focus_times
 
         # Get occupied timeblocks
-        time_blocks = get_schedule_time_blocks(self.schedule) + get_time_blocks(preference.end_of_work_day, preference.start_of_work_day)
+        time_blocks = get_schedule_time_blocks(self.schedule) + (get_time_blocks(preference.end_of_work_day, preference.start_of_work_day) if (preference != None) else [])
 
         # Preferred break length
         preferred_break_length = preference.break_length * 60 if (preference != None) else 0
@@ -280,7 +280,7 @@ class WeeklyScheduleBuilder:
         for schedule in self.schedules:
             schedule.schedule_items.clear()
 
-    def schedule_sleep_hours(self, preference: Preference) -> None:
+    def schedule_sleep_hours(self, preference: Optional[Preference] = None) -> None:
         if (preference != None and preference.sleep_time != None and preference.wake_up_time != None):
             time_obj_blocks = get_time_obj_blocks(preference.sleep_time, preference.wake_up_time)
             sleep_schedule_items = [
@@ -413,7 +413,7 @@ class WeeklyScheduleBuilder:
             for i, schedule_items in enumerate(scheduled_weekly_habits):
                 self.schedules[i].schedule_items += schedule_items
 
-    def schedule_work_sessions(self, preference: Preference) -> None:
+    def schedule_work_sessions(self, preference: Optional[Preference] = None) -> None:
         schedule_builder = ScheduleBuilder(self.schedules[0])
         for schedule in self.schedules:
             if (schedule.requires_work_refresh):
