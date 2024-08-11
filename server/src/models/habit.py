@@ -2,6 +2,7 @@ from sqlalchemy import Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.schema import CheckConstraint, UniqueConstraint, ForeignKey
 from litestar.contrib.sqlalchemy.base import UUIDBase
+from lib.time import MINUTES_PER_DAY
 import enum
 
 class RepeatIntervalEnum(str, enum.Enum):
@@ -20,7 +21,7 @@ class Habit(UUIDBase):
 
     name: Mapped[str]
     frequency: Mapped[int] = mapped_column(CheckConstraint("frequency >= 1", name="frequency_gte_1"))
-    duration: Mapped[int] = mapped_column(CheckConstraint("duration >= 1", name="duration_gte_1"))
+    duration: Mapped[int] = mapped_column(CheckConstraint(f"1 <= duration AND duration <= {MINUTES_PER_DAY}", name="duration_positive_and_within_1_day"))
     repeat_interval: Mapped[str] = mapped_column(Enum(RepeatIntervalEnum, name="repeat_interval"))
     morning_preferred: Mapped[bool] = mapped_column(default=False)
     afternoon_preferred: Mapped[bool] = mapped_column(default=False)

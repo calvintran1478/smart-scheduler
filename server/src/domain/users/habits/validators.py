@@ -2,6 +2,7 @@ from typing_extensions import Annotated
 from pydantic.functional_validators import AfterValidator
 from litestar.exceptions import ClientException
 from models.habit import RepeatIntervalEnum, TimePrefererenceEnum
+from lib.time import MINUTES_PER_DAY
 
 def check_habit_name(habit_name: str) -> str:
     if (habit_name == ""):
@@ -9,9 +10,17 @@ def check_habit_name(habit_name: str) -> str:
 
     return habit_name
 
+def check_duration(duration: int) -> int:
+    if (duration <= 0):
+        raise ClientException("Duration must be positive")
+    elif (duration > MINUTES_PER_DAY):
+        raise ClientException("Duration cannot exceed minutes in a day")
+
+    return duration
+
 def check_habit_repeat_interval(repeat_interval: str) -> str:
     normalized_repeat_interval = repeat_interval.upper()
-    if not normalized_repeat_interval in RepeatIntervalEnum:
+    if (normalized_repeat_interval not in RepeatIntervalEnum):
         raise ClientException("Invalid repeat interval")
 
     return normalized_repeat_interval
@@ -35,5 +44,6 @@ def check_habit_time_preference(time_preference: list[str]) -> list[str]:
     return time_preference
 
 HabitName = Annotated[str, AfterValidator(check_habit_name)]
+MinuteDuration = Annotated[int, AfterValidator(check_duration)]
 RepeatInterval = Annotated[str, AfterValidator(check_habit_repeat_interval)]
 HabitTimePreference = Annotated[list[str], AfterValidator(check_habit_time_preference)]
