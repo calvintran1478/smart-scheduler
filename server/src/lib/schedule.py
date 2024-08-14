@@ -124,15 +124,11 @@ def remove_weekly_habit_sessions(schedules: Sequence[Schedule], weekly_habit_nam
         )
 
         locked_schedule_items.append(
-            tuple(
-                schedule_item for schedule_item in weekly_habit_sessions if schedule_item.locked
-            )
+            tuple(schedule_item for schedule_item in weekly_habit_sessions if schedule_item.locked)
         )
 
         non_locked_schedule_items.append(
-            tuple(
-                schedule_item for schedule_item in weekly_habit_sessions if not schedule_item.locked
-            )
+            tuple(schedule_item for schedule_item in weekly_habit_sessions if not schedule_item.locked)
         )
 
         # Remove weekly habit sessions from schedule
@@ -201,7 +197,7 @@ class ScheduleBuilder:
         locked_habit_sessions, non_locked_habit_sessions = remove_schedule_items_by_type(self.schedule, ScheduleItemTypeEnum.HABIT, daily_habit_names)
 
         # Get daily habit instances
-        daily_items = [item for item in get_previous_daily_items(locked_habit_sessions, non_locked_habit_sessions) if item[0] in daily_habit_names]
+        daily_items = get_previous_daily_items(locked_habit_sessions, non_locked_habit_sessions)
 
         # Add missing habit sessions
         for habit in daily_habits:
@@ -241,7 +237,7 @@ class ScheduleBuilder:
 
         # Add missing focus sessions
         min_focus_sessions = 4
-        num_focus_sessions_to_add = max(0, min_focus_sessions - (len(locked_focus_sessions) + len(non_locked_focus_sessions)))
+        num_focus_sessions_to_add = max(0, min_focus_sessions - len(daily_items))
         daily_items += [("Work session", 3600, ScheduleItemTypeEnum.FOCUS_SESSION, False)] * num_focus_sessions_to_add
 
         # Get default best focus times based on preference
