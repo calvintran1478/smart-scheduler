@@ -187,3 +187,34 @@ class ScheduleController(Controller):
             raise ClientException(detail="New times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
 
         await schedules_repo.update(schedule, auto_commit=True)
+
+    @delete(path="/{schedule_date:date}/habit-sessions/{schedule_item_id:uuid}")
+    async def remove_habit_session(self, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository, habits_repo: HabitRepository) -> None:
+        # Get schedule
+        schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
+        if (schedule == None):
+            raise NotFoundException(detail="Habit session not found")
+
+        # Search for habit session
+        try:
+            habit_session = next(schedule_item for schedule_item in schedule.schedule_items if schedule_item.id == schedule_item_id and schedule_item.schedule_item_type == ScheduleItemTypeEnum.HABIT)
+        except StopIteration:
+            raise NotFoundException(detail="Habit session not found")
+
+        # If weekly habit session was removed reschedule to a new date
+        weekly_habits = await habits_repo.list(user_id=user.id, repeat_interval=RepeatIntervalEnum.WEEKLY)
+        weekly_habit_names = tuple(habit.name for habit in weekly_habits)
+        if (habit_session.name in weekly_habit_names):
+            habit = next(habit for habit in weekly_habits if habit.name == habit_session.name)
+            candidate_schedules = await schedules_repo.list(Schedule.user_id==user.id, Schedule.date>schedule_date)
+            for candidate_schedule in candidate_schedules:
+                schedule_builder = ScheduleBuilder(candidate_schedule)
+                try:
+                    schedule_builder.add_habit_session(habit)
+                    schedule.schedule_items.remove(habit_session)
+                    return
+                except ClientException:
+                    pass
+
+        # Remove habit session from schedule
+        schedule.schedule_items.remove(habit_session)
