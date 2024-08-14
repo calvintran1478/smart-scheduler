@@ -9,14 +9,13 @@ from litestar.status_codes import HTTP_409_CONFLICT
 from litestar.exceptions import ClientException
 
 from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
-from lib.time import seconds_to_time_object, SECONDS_PER_DAY, DAYS_PER_WEEK, START_OF_DAY, END_OF_DAY
+from lib.time import seconds_to_time_object, TimeBlock, SECONDS_PER_DAY, DAYS_PER_WEEK, START_OF_DAY, END_OF_DAY
 
 # Constants
 FAILURE = "FAILURE"
 
 # Type definitions
 type ScheduleItemDetails = tuple[str, int, ScheduleItemTypeEnum, bool] # name, duration (in seconds), schedule item type, prioritized
-type TimeBlock = tuple[float, float]
 type Domain = list[int]
 type Relation = callable[[dict[TimeVariable, int]], bool]
 type Constraint = tuple[list[TimeVariable], Relation]

@@ -18,6 +18,8 @@ from domain.users.events.dependencies import provide_events_repo
 from domain.users.events.validators import check_timezone
 from domain.users.habits.repositories import HabitRepository
 from domain.users.habits.dependencies import provide_habits_repo
+from domain.users.tasks.repositories import TaskRepository
+from domain.users.tasks.dependencies import provide_tasks_repo
 from lib.time import convert_to_utc, seconds_to_time_object, get_time_difference, SECONDS_PER_DAY
 from lib.schedule import requires_refresh, requires_week_refresh
 
@@ -29,7 +31,8 @@ class ScheduleController(Controller):
         "schedules_repo": Provide(provide_schedules_repo),
         "preferences_repo": Provide(provide_preferences_repo),
         "events_repo": Provide(provide_events_repo),
-        "habits_repo": Provide(provide_habits_repo)
+        "habits_repo": Provide(provide_habits_repo),
+        "tasks_repo": Provide(provide_tasks_repo)
     }
 
     @get(path="/{schedule_date:date}", return_dto=ScheduleDTO)
@@ -41,6 +44,7 @@ class ScheduleController(Controller):
         preferences_repo: PreferenceRepository,
         events_repo: EventRepository,
         habits_repo: HabitRepository,
+        tasks_repo: TaskRepository,
         timezone: str = "UTC"
     ) -> Schedule:
         # Check if the schedule has already been generated
@@ -48,7 +52,7 @@ class ScheduleController(Controller):
 
         # If not, or its associated weekly schedule requires a refresh, plan out schedule for the week
         if (schedule == None or (await requires_week_refresh(schedule, timezone, user, habits_repo))):
-            weekly_schedule = await schedules_repo.create_weekly_schedule(user, schedule_date, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
+            weekly_schedule = await schedules_repo.create_weekly_schedule(user, schedule_date, preferences_repo, events_repo, habits_repo, tasks_repo, check_timezone(timezone))
             schedule = weekly_schedule[schedule_date.weekday()]
 
         # Otherwise return the schedule after refreshing it if necessary
@@ -67,12 +71,13 @@ class ScheduleController(Controller):
         preferences_repo: PreferenceRepository,
         events_repo: EventRepository,
         habits_repo: HabitRepository,
+        tasks_repo: TaskRepository,
         timezone: str
     ) -> ScheduleItem:
         # Get schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
         if (schedule == None or (await requires_week_refresh(schedule, timezone, user, habits_repo))):
-            weekly_schedule = await schedules_repo.create_weekly_schedule(user, schedule_date, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
+            weekly_schedule = await schedules_repo.create_weekly_schedule(user, schedule_date, preferences_repo, events_repo, habits_repo, tasks_repo, check_timezone(timezone))
             schedule = weekly_schedule[schedule_date.weekday()]
         elif (requires_refresh(schedule, timezone)):
             await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, check_timezone(timezone))

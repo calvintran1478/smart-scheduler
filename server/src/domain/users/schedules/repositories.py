@@ -5,6 +5,7 @@ from models.schedule_item import ScheduleItemTypeEnum
 from domain.users.preferences.repositories import PreferenceRepository
 from domain.users.events.repositories import EventRepository
 from domain.users.habits.repositories import HabitRepository
+from domain.users.tasks.repositories import TaskRepository
 from lib.schedule import ScheduleBuilder, ScheduleDirector, WeeklyScheduleBuilder, WeeklyScheduleDirector
 from uuid import UUID
 from sqlalchemy import update, delete
@@ -38,7 +39,7 @@ class ScheduleRepository(SQLAlchemyAsyncRepository[Schedule]):
         # Save schedule
         await self.update(schedule, auto_commit=True)
 
-    async def create_weekly_schedule(self, user: User, schedule_date: date, preferences_repo: PreferenceRepository, events_repo: EventRepository, habits_repo: HabitRepository, timezone_format: timezone) -> list[Schedule]:
+    async def create_weekly_schedule(self, user: User, schedule_date: date, preferences_repo: PreferenceRepository, events_repo: EventRepository, habits_repo: HabitRepository, tasks_repo: TaskRepository, timezone_format: timezone) -> list[Schedule]:
         # Get schedules
         schedules = await self.list(user_id=user.id)
 
@@ -56,7 +57,7 @@ class ScheduleRepository(SQLAlchemyAsyncRepository[Schedule]):
         # Generate weekly schedule
         schedule_builder = WeeklyScheduleBuilder(schedules)
         schedule_director = WeeklyScheduleDirector()
-        await schedule_director.generate_schedule(schedule_builder, user, preferences_repo, events_repo, habits_repo, timezone_format)
+        await schedule_director.generate_schedule(schedule_builder, user, schedule_date, preferences_repo, events_repo, habits_repo, tasks_repo, timezone_format)
 
         # Save schedules
         await self.upsert_many(schedules)

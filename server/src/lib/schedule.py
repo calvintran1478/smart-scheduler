@@ -4,12 +4,15 @@ from models.schedule_item import ScheduleItem, ScheduleItemTypeEnum
 from models.preference import Preference
 from models.habit import Habit, RepeatIntervalEnum
 from models.event import Event
+from models.task import Task
 from domain.users.preferences.repositories import PreferenceRepository
 from domain.users.events.repositories import EventRepository
 from domain.users.habits.repositories import HabitRepository
-from lib.time import convert_to_utc, get_time_difference, SECONDS_PER_DAY, DAYS_PER_WEEK, START_OF_DAY, END_OF_DAY
-from lib.constraint import TimeBlock, schedule_daily_items, schedule_weekly_items
-from datetime import time, date, datetime, timedelta
+from domain.users.tasks.repositories import TaskRepository
+from lib.time import convert_to_utc, get_time_difference, seconds_to_time_object, get_time_blocks, get_time_obj_blocks, get_schedule_time_blocks, SECONDS_PER_DAY, DAYS_PER_WEEK, START_OF_DAY, END_OF_DAY
+from lib.constraint import schedule_daily_items, schedule_weekly_items
+from lib.strategy import ChipStrategy
+from datetime import date, datetime, timedelta
 from pytz import timezone
 from math import floor
 from copy import deepcopy
@@ -35,40 +38,6 @@ WEEKLY_MORNING = get_weekly_preferred_times(MORNING)
 WEEKLY_AFTERNOON = get_weekly_preferred_times(AFTERNOON)
 WEEKLY_EVENING = get_weekly_preferred_times(EVENING)
 WEEKLY_NIGHT = get_weekly_preferred_times(NIGHT)
-
-def get_time_blocks(start_time: time, end_time: time) -> list[TimeBlock]:
-    # Get second timestamps of each time object from the start of the day
-    start_timestamp = start_time.hour * 3600 + start_time.minute * 60 + start_time.second
-    end_timestamp = end_time.hour * 3600 + end_time.minute * 60 + end_time.second
-
-    # Add 1 or 2 timeblocks depending if the time interval crosses over midnight
-    time_blocks = []
-    if (start_timestamp > end_timestamp):
-        time_blocks.append((start_timestamp, SECONDS_PER_DAY))
-        if (end_timestamp != 0):
-            time_blocks.append((0, end_timestamp))
-    else:
-        time_blocks.append((start_timestamp, end_timestamp))
-
-    return time_blocks
-
-def get_time_obj_blocks(start_time: time, end_time: time) -> list[tuple[time, time]]:
-    time_obj_blocks = []
-    if (start_time > end_time):
-        time_obj_blocks.append((start_time, END_OF_DAY))
-        if (end_time != START_OF_DAY):
-            time_obj_blocks.append((START_OF_DAY, end_time))
-    else:
-        time_obj_blocks.append((start_time, end_time))
-
-    return time_obj_blocks
-
-def get_schedule_time_blocks(schedule: Schedule) -> list[TimeBlock]:
-    return [
-        (schedule_item.start_time.hour * 3600 + schedule_item.start_time.minute * 60 + schedule_item.start_time.second,
-        schedule_item.end_time.hour * 3600 + schedule_item.end_time.minute * 60 + schedule_item.end_time.second)
-        for schedule_item in schedule.schedule_items
-    ]
 
 def get_events_for_the_day(event_date: date, events: Sequence[Event], timezone_format: timezone) -> tuple[Event, ...]:
     event_date_start_time = convert_to_utc(timezone_format, datetime(event_date.year, event_date.month, event_date.day))
@@ -235,11 +204,6 @@ class ScheduleBuilder:
         # Get daily items
         daily_items = get_previous_daily_items(locked_focus_sessions, non_locked_focus_sessions)
 
-        # Add missing focus sessions
-        min_focus_sessions = 4
-        num_focus_sessions_to_add = max(0, min_focus_sessions - len(daily_items))
-        daily_items += [("Work session", 3600, ScheduleItemTypeEnum.FOCUS_SESSION, False)] * num_focus_sessions_to_add
-
         # Get default best focus times based on preference
         default_best_focus_times = []
         if (preference != None):
@@ -252,7 +216,7 @@ class ScheduleBuilder:
             for focus_session in locked_focus_sessions
         ]
 
-        non_locked_best_focus_times = [default_best_focus_times] * (len(non_locked_focus_sessions) + num_focus_sessions_to_add)
+        non_locked_best_focus_times = [default_best_focus_times] * len(non_locked_focus_sessions)
         best_focus_times = locked_best_focus_times + non_locked_best_focus_times
 
         # Get occupied timeblocks
@@ -409,7 +373,24 @@ class WeeklyScheduleBuilder:
             for i, schedule_items in enumerate(scheduled_weekly_habits):
                 self.schedules[i].schedule_items += schedule_items
 
-    def schedule_work_sessions(self, preference: Optional[Preference] = None) -> None:
+    def schedule_work_sessions(self, schedule_date: date, timezone_format: timezone, tasks: Sequence[Task], preference: Optional[Preference] = None) -> None:
+        schedules_to_plan = tuple(schedule for schedule in self.schedules if schedule.date >= schedule_date)
+        strategy = ChipStrategy()
+        work_plan = strategy.execute(schedules_to_plan, tasks, preference, START_OF_DAY, timezone_format)
+
+        for schedule in schedules_to_plan:
+            for assigned_focus_block in work_plan[schedule]:
+                assigned_task = next(task for task in tasks if task.id == assigned_focus_block[0])
+                focus_session = ScheduleItem(
+                    name=assigned_task.name,
+                    start_time=START_OF_DAY,
+                    end_time=seconds_to_time_object(assigned_focus_block[1]),
+                    locked=False,
+                    schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION
+                )
+                schedule.schedule_items.append(focus_session)
+                schedule.requires_work_refresh = True
+        
         schedule_builder = ScheduleBuilder(self.schedules[0])
         for schedule in self.schedules:
             if (schedule.requires_work_refresh):
@@ -463,9 +444,11 @@ class WeeklyScheduleDirector:
         self,
         builder: WeeklyScheduleBuilder,
         user: User,
+        schedule_date: date,
         preferences_repo: PreferenceRepository,
         events_repo: EventRepository,
         habits_repo: HabitRepository,
+        tasks_repo: TaskRepository,
         timezone_format: timezone
     ) -> None:
         # Check for timezone change
@@ -498,4 +481,5 @@ class WeeklyScheduleDirector:
 
         # Schedule work sessions
         if any(schedule.requires_work_refresh for schedule in builder.schedules):
-            builder.schedule_work_sessions(preference)
+            tasks = await tasks_repo.list(user_id = user.id)
+            builder.schedule_work_sessions(schedule_date, timezone_format, tasks, preference)
