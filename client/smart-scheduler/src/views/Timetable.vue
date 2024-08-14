@@ -32,12 +32,12 @@
               <ion-input v-model="newFocusSession.name" placeholder="Enter session name"></ion-input>
             </ion-item>
             <ion-item>
-              <ion-label position="stacked">Start Time</ion-label>
-              <ion-input v-model="newFocusSession.start_time" type="time" required></ion-input>
+              <ion-label position="stacked">Start Time (Optional)</ion-label>
+              <ion-input v-model="newFocusSession.start_time" type="time" ></ion-input>
             </ion-item>
             <ion-item>
-              <ion-label position="stacked">End Time</ion-label>
-              <ion-input v-model="newFocusSession.end_time" type="time" required></ion-input>
+              <ion-label position="stacked">Duration (in minutes)</ion-label>
+              <ion-input v-model="newFocusSession.duration" type="number" required></ion-input>
             </ion-item>
           </ion-list>
           <ion-button expand="full" @click="addFocusSession">Add Session</ion-button>
@@ -115,7 +115,7 @@
         newFocusSession: {
           name: '',
           start_time: '',
-          end_time: '',
+          duration: 0,
         },
         editFocusSession: {
           id: '',
@@ -203,9 +203,12 @@
 
       const requestBody = {
         name: this.newFocusSession.name,
-        start_time: this.newFocusSession.start_time,
-        end_time: this.newFocusSession.end_time
+        duration: this.newFocusSession.duration,
       };
+
+      if (this.newFocusSession.start_time !== '') {
+        requestBody.start_time = this.newFocusSession.start_time;
+      }
 
       try {
         const response = await fetch(`http://localhost:8000/api/v1/users/schedules/${date}/focus-sessions?timezone=${timezone}`, {
