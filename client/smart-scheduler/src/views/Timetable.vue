@@ -17,11 +17,13 @@
           </ion-item>
         </ion-list>
         <ion-button @click="openModal">Add Focus Session</ion-button>
+
       <focus-modal v-if="isModalOpen" @close="closeModal">
         <ion-header>
           <ion-toolbar>
             <ion-title>Add Focus Session</ion-title>
             <ion-buttons slot="end">
+              <ion-button @click="closeModal">Close</ion-button>
             </ion-buttons>
           </ion-toolbar>
         </ion-header>
@@ -41,6 +43,9 @@
             </ion-item>
           </ion-list>
           <ion-button expand="full" @click="addFocusSession">Add Session</ion-button>
+        </ion-content>
+          </focus-modal>
+
         <edit-modal v-if="isEditModalOpen" @close="closeEditModal">
         <ion-header>
           <ion-toolbar>
@@ -68,8 +73,6 @@
           <ion-button expand="full" @click="updateScheduleItem">Update Session</ion-button>
         </ion-content>
       </edit-modal>
-        </ion-content>
-      </focus-modal>
       </ion-content>
     </ion-page>
   </template>
