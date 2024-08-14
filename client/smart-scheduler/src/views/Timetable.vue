@@ -44,7 +44,7 @@
         <edit-modal v-if="isEditModalOpen" @close="closeEditModal">
         <ion-header>
           <ion-toolbar>
-            <ion-title>Edit Focus Session</ion-title>
+            <ion-title>Edit Session</ion-title>
             <ion-buttons slot="end">
               <ion-button @click="closeEditModal">Close</ion-button>
             </ion-buttons>
@@ -54,18 +54,18 @@
           <ion-list>
             <ion-item>
               <ion-label position="stacked">Session Name</ion-label>
-              <ion-input v-model="editFocusSession.name" placeholder="Enter session name"></ion-input>
+              <ion-input v-model="editScheduleItem.name" placeholder="Enter session name"></ion-input>
             </ion-item>
             <ion-item>
               <ion-label position="stacked">Start Time</ion-label>
-              <ion-input v-model="editFocusSession.start_time" type="time" required></ion-input>
+              <ion-input v-model="editScheduleItem.start_time" type="time" required></ion-input>
             </ion-item>
             <ion-item>
               <ion-label position="stacked">End Time</ion-label>
-              <ion-input v-model="editFocusSession.end_time" type="time" required></ion-input>
+              <ion-input v-model="editScheduleItem.end_time" type="time" required></ion-input>
             </ion-item>
           </ion-list>
-          <ion-button expand="full" @click="updateFocusSession">Update Session</ion-button>
+          <ion-button expand="full" @click="updateScheduleItem">Update Session</ion-button>
         </ion-content>
       </edit-modal>
         </ion-content>
@@ -117,7 +117,7 @@
           start_time: '',
           duration: 0,
         },
-        editFocusSession: {
+        editScheduleItem: {
           id: '',
           name: '',
           start_time: '',
@@ -135,11 +135,12 @@
         this.isModalOpen=false;
       },
       openEditModal(item) {
-      this.editFocusSession = { 
+      this.editScheduleItem = { 
         id: item.schedule_item_id, 
+        type: item.schedule_item_type,
         name: item.name, 
         start_time: item.start_time, 
-        end_time: item.end_time 
+        end_time: item.end_time
       };
       this.isEditModalOpen = true;
     },
@@ -237,7 +238,7 @@
         console.error('Error adding focus session:', error);
       }
     },
-    async updateFocusSession() {
+    async updateScheduleItem() {
       const date = format(new Date(), 'yyyy-MM-dd');
       const token = localStorage.getItem("token");
       if (!token) {
@@ -246,13 +247,19 @@
       }
 
       const requestBody = {
-        name: this.editFocusSession.name,
-        start_time: this.editFocusSession.start_time,
-        end_time: this.editFocusSession.end_time
+        name: this.editScheduleItem.name,
+        start_time: this.editScheduleItem.start_time,
+        end_time: this.editScheduleItem.end_time
       };
 
       try {
-        const response = await fetch(`http://localhost:8000/api/v1/users/schedules/${date}/focus-sessions/${this.editFocusSession.id}`, {
+        let url = `http://localhost:8000/api/v1/users/schedules/${date}`;
+        if (this.editScheduleItem.type === 'HABIT') {  // Edit habit session
+          url += `/habit-sessions/${this.editScheduleItem.id}`;
+        } else if (this.editScheduleItem.type === 'FOCUS_SESSION') { // Edit focus session
+          url += `/focus-sessions/${this.editScheduleItem.id}`;
+        }
+        const response = await fetch(url, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -264,11 +271,11 @@
 
         if (response.status === 204) {
           this.scheduleItems = this.scheduleItems.map(item => 
-            item.schedule_item_id === this.editFocusSession.id 
+            item.schedule_item_id === this.editScheduleItem.id 
               ? { ...item, ...requestBody } 
               : item
           );
-          console.log('Focus session updated:', this.editFocusSession);
+          console.log('Session updated:', this.editScheduleItem.name);
           this.closeEditModal();
         } else if (response.status === 401) {
           console.error('Unauthorized');
