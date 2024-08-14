@@ -242,15 +242,38 @@ class ScheduleBuilder:
         if (preference != None):
             for preferred_time_interval in reversed(preference.best_focus_times):
                 best_focus_times += get_time_blocks(preferred_time_interval.start_time, preferred_time_interval.end_time)
-        
+
         # Preferred break length
-        preferred_break_length = preference.break_length * 60 if (preference != None) else 0
+        preferred_break_length = 0
 
         # Schedule focus session
         focus_session = schedule_daily_items(time_blocks, daily_items, (best_focus_times,), preferred_break_length)[0]
         self.schedule.schedule_items.append(focus_session)
 
         return focus_session
+
+    def add_habit_session(self, habit: Habit) -> ScheduleItem:
+        # Get occupied time blocks
+        time_blocks = get_schedule_time_blocks(self.schedule)
+
+        # Daily items
+        daily_items = ((habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False),)
+
+        # Preferred times
+        preferred_times = []
+        preferred_times += MORNING if habit.morning_preferred else []
+        preferred_times += AFTERNOON if habit.afternoon_preferred else []
+        preferred_times += EVENING if habit.evening_preferred else []
+        preferred_times += NIGHT if habit.night_preferred else []
+
+        # Preferred break length
+        preferred_spacing = 0
+
+        # Schedule habit session
+        habit_session = schedule_daily_items(time_blocks, daily_items, (preferred_times,), preferred_spacing)[0]
+        self.schedule.schedule_items.append(habit_session)
+
+        return habit_session
 
 class WeeklyScheduleBuilder:
     schedules: Sequence[Schedule]
