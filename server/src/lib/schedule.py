@@ -230,6 +230,28 @@ class ScheduleBuilder:
 
         self.schedule.requires_work_refresh = False
 
+    def add_work_session(self, name: str, duration: int, preference: Optional[Preference] = None) -> ScheduleItem:
+        # Get occupied time blocks
+        time_blocks = get_schedule_time_blocks(self.schedule) + (get_time_blocks(preference.end_of_work_day, preference.start_of_work_day) if (preference != None) else [])
+
+        # Daily items
+        daily_items = ((name, duration, ScheduleItemTypeEnum.FOCUS_SESSION, False),)
+
+        # Best focus times
+        best_focus_times = []
+        if (preference != None):
+            for preferred_time_interval in reversed(preference.best_focus_times):
+                best_focus_times += get_time_blocks(preferred_time_interval.start_time, preferred_time_interval.end_time)
+        
+        # Preferred break length
+        preferred_break_length = preference.break_length * 60 if (preference != None) else 0
+
+        # Schedule focus session
+        focus_session = schedule_daily_items(time_blocks, daily_items, (best_focus_times,), preferred_break_length)[0]
+        self.schedule.schedule_items.append(focus_session)
+
+        return focus_session
+
 class WeeklyScheduleBuilder:
     schedules: Sequence[Schedule]
 

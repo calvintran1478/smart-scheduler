@@ -21,7 +21,7 @@ from domain.users.habits.dependencies import provide_habits_repo
 from domain.users.tasks.repositories import TaskRepository
 from domain.users.tasks.dependencies import provide_tasks_repo
 from lib.time import convert_to_utc, seconds_to_time_object, get_time_difference, SECONDS_PER_DAY
-from lib.schedule import requires_refresh, requires_week_refresh
+from lib.schedule import requires_refresh, requires_week_refresh, ScheduleBuilder
 
 from datetime import date, timedelta
 from uuid import UUID
@@ -82,20 +82,33 @@ class ScheduleController(Controller):
         elif (requires_refresh(schedule, timezone)):
             await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
 
-        # Check if chosen times overlap with existing schedule items
-        if any(data.end_time > schedule_item.start_time and data.start_time < schedule_item.end_time for schedule_item in schedule.schedule_items):
-            raise ClientException(detail="Chosen times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
+        # Add a new focus session to the schedule
+        if (data.start_time == None):
+            # Plan focus session for the user based on their preferences
+            preference = await preferences_repo.get_one_or_none(user_id = user.id)
+            schedule_builder = ScheduleBuilder(schedule)
+            focus_session = schedule_builder.add_work_session(data.name, data.duration * 60, preference)
+        else:
+            # Check if focus session is contained within a single day
+            end_time_offset = data.start_time.hour * 3600 + (data.start_time.minute + data.duration) * 60 + data.start_time.second
+            if (end_time_offset > SECONDS_PER_DAY):
+                raise ClientException(detail="Focus session must be contained within a single day")
 
-        # Create focus session for the user
-        focus_session = ScheduleItem(
-            name=data.name,
-            start_time=data.start_time,
-            end_time=data.end_time,
-            locked=True,
-            schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION
-        )
+            # Create focus session for the user
+            focus_session = ScheduleItem(
+                name=data.name,
+                start_time=data.start_time,
+                end_time=seconds_to_time_object(end_time_offset),
+                locked=True,
+                schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION
+            )
 
-        schedule.schedule_items.append(focus_session)
+            # Check if chosen times overlap with existing schedule items
+            if any(focus_session.end_time > schedule_item.start_time and focus_session.start_time < schedule_item.end_time for schedule_item in schedule.schedule_items):
+                raise ClientException(detail="Chosen times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
+
+            schedule.schedule_items.append(focus_session)
+
         await schedules_repo.update(schedule, auto_commit=True)
 
         return focus_session
