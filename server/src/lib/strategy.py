@@ -57,68 +57,71 @@ class ChipStrategy(WorkStrategy):
         # Initialize work plan
         work_plan = {schedule: [] for schedule in schedules}
 
+        # Get starting time for the user
+        start = datetime.combine(schedules[0].date, start_time, tzinfo=timezone)
+
         # Plan tasks in order of priority
         sorted_tasks = sorted(tasks, key=attrgetter('deadline'))
         for task in sorted_tasks:
-            # Get time range for which tasks can be completed
-            start = datetime.combine(schedules[0].date, start_time, tzinfo=timezone)
-            end = task.deadline
-            time_to_finish = (end - start).total_seconds()
+            # Get time range for which the task can be completed
+            time_to_finish = (task.deadline - start).total_seconds()
 
             # Get time required to complete the task
-            required_seconds = task.time_estimate.hour * 3600 + task.time_estimate.minute * 60 + task.time_estimate.second
+            required_seconds = (task.time_estimate.hour * 3600 + task.time_estimate.minute * 60 + task.time_estimate.second) - (task.minutes_completed * 60)
 
-            # Determine how many sessions should be made for this task and how long each should be
-            session_length, num_sessions = self.break_down_work_time(required_seconds)
+            # Plan focus sessions for the task if needed
+            if (required_seconds >= 0 and not task.done):
+                # Determine how many sessions should be made for this task and how long each should be
+                session_length, num_sessions = self.break_down_work_time(required_seconds)
 
-            # Determine available times for each scheduled day
-            available_time_blocks = self.get_available_time_blocks(schedules, tasks, preference, start_time)
+                # Determine available times for each scheduled day
+                available_time_blocks = self.get_available_time_blocks(schedules, tasks, preference, start_time)
 
-            # Determine roughly how many sessions should be scheduled for each day
-            num_days = (date(task.deadline.year, task.deadline.month, task.deadline.day) - schedules[0].date).days + 1
-            sessions_per_day = num_sessions / num_days
+                # Determine roughly how many sessions should be scheduled for each day
+                num_days = (date(task.deadline.year, task.deadline.month, task.deadline.day) - schedules[0].date).days + 1
+                sessions_per_day = num_sessions / num_days
 
-            # Initialize state variables for keeping track of how many sessions need to be scheduled
-            session_counter = ceil(sessions_per_day * len(schedules))
-            sessions_added = 0
-            schedule_index = 0
-            schedules_done = []
+                # Initialize state variables for keeping track of how many sessions need to be scheduled
+                session_counter = ceil(sessions_per_day * len(schedules))
+                sessions_added = 0
+                schedule_index = 0
+                schedules_done = []
 
-            # Initialize variables for ensuring even distribution of focus sessions
-            start_index = 0
-            n = 0
-            if (sessions_per_day > (1/2)):
-                n = 1
-            elif ((1/3) < sessions_per_day <= (1/2)):
-                n = 2
-            elif ((1/7) < sessions_per_day <= (1/3)):
-                n = 3
-            else:
-                n = 7
+                # Initialize variables for ensuring even distribution of focus sessions
+                start_index = 0
+                n = 0
+                if (sessions_per_day > (1/2)):
+                    n = 1
+                elif ((1/3) < sessions_per_day <= (1/2)):
+                    n = 2
+                elif ((1/7) < sessions_per_day <= (1/3)):
+                    n = 3
+                else:
+                    n = 7
 
-            # Iteratively add sessions from the current date in a cyclic manner until all sessions are assigned a date (or all schedules are full)
-            while (sessions_added < session_counter and len(schedules_done) < len(schedules)):
-                if (schedule_index not in schedules_done):
-                    # Get available times for this schedule
-                    available_times = available_time_blocks[schedules[schedule_index]]
+                # Iteratively add sessions from the current date in a cyclic manner until all sessions are assigned a date (or all schedules are full)
+                while (sessions_added < session_counter and len(schedules_done) < len(schedules)):
+                    if (schedule_index not in schedules_done):
+                        # Get available times for this schedule
+                        available_times = available_time_blocks[schedules[schedule_index]]
 
-                    # Determine the time block which has the most free time
-                    max_value = max(available_times)
-                    max_index = available_times.index(max_value)
+                        # Determine the time block which has the most free time
+                        max_value = max(available_times)
+                        max_index = available_times.index(max_value)
 
-                    # Add work session to the schedule if possible
-                    if (session_length <= max_value):
-                        work_plan[schedules[schedule_index]].append((task.id, session_length))
-                        available_times[max_index] -= session_length
-                        sessions_added += 1
-                    else:
-                        schedules_done.append(schedule_index)
+                        # Add work session to the schedule if possible
+                        if (session_length <= max_value):
+                            work_plan[schedules[schedule_index]].append((task.id, session_length))
+                            available_times[max_index] -= session_length
+                            sessions_added += 1
+                        else:
+                            schedules_done.append(schedule_index)
 
-                # Determine next schedule to test for
-                schedule_index = (schedule_index + 1) % len(schedules)
-                schedule_index += n
-                if (schedule_index >= len(schedules)):
-                    schedule_index = start_index
-                    start_index = (start_index + 1) % n
+                    # Determine next schedule to test for
+                    schedule_index = (schedule_index + 1) % len(schedules)
+                    schedule_index += n
+                    if (schedule_index >= len(schedules)):
+                        schedule_index = start_index
+                        start_index = (start_index + 1) % n
 
         return work_plan
