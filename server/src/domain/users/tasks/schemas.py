@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, NonNegativeInt
 from typing import Optional
 from typing_extensions import Self
 from datetime import date, time
@@ -19,6 +19,7 @@ class UpdateTaskInput(BaseModel):
     name: Optional[str] = None
     deadline: Optional["datetime.datetime"] = None
     time_estimate: Optional["datetime.time"] = None
+    minutes_completed: Optional[NonNegativeInt] = None
     timezone: Optional[TimeZone] = None
     done: Optional[bool] = None
     tag: Optional[str] = None
