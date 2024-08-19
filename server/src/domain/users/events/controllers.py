@@ -49,7 +49,7 @@ class EventController(Controller):
         await events_repo.add(event, auto_commit=True, auto_expunge=True)
 
         # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
         return event
 
@@ -102,7 +102,7 @@ class EventController(Controller):
                     await updated_event_instances_repo.delete_after_date(event.id, new_until)
 
                 # Mark schedules for refresh
-                await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+                await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
         # Update a particular instance of the event
         elif (start != None and timezone != None):
@@ -142,7 +142,7 @@ class EventController(Controller):
 
             # Mark schedules for refresh
             if (update_data.timezone == None):
-                await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+                await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
         # Handle missing query parameters
         else:
@@ -165,7 +165,7 @@ class EventController(Controller):
             await events_repo.delete(event.id, auto_commit=True)
 
             # Mark schedules for refresh
-            await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+            await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
         # Delete a particular instance of the event
         elif (start != None and timezone != None):
@@ -186,7 +186,7 @@ class EventController(Controller):
                 await updated_event_instances_repo.delete_by_start_time_and_event_id(start_time, event.id)
 
             # Mark schedules for refresh
-            await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+            await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
         # Handle missing query parameters
         else:

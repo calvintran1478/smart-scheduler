@@ -11,13 +11,14 @@ from uuid import UUID
 from sqlalchemy import update, delete
 from pytz import timezone
 from datetime import date, timedelta
+from collections.abc import Sequence
 
 class ScheduleRepository(SQLAlchemyAsyncRepository[Schedule]):
     """Schedule repository"""
 
     model_type = Schedule
 
-    async def mark_schedules_for_refresh(self, user_id: UUID, schedule_item_types: list[ScheduleItemTypeEnum]) -> None:
+    async def mark_schedules_for_refresh(self, user_id: UUID, schedule_item_types: Sequence[ScheduleItemTypeEnum]) -> None:
         for schedule_item_type in schedule_item_types:
             match schedule_item_type:
                 case ScheduleItemTypeEnum.EVENT:

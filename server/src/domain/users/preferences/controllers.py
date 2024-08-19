@@ -81,7 +81,7 @@ class PreferenceController(Controller):
             await preferences_repo.add(preference, auto_commit=True)
 
         # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, list(schedule_item_types_to_refresh))
+        await schedules_repo.mark_schedules_for_refresh(user.id, tuple(schedule_item_types_to_refresh))
 
         # Send appropriate response based on whether preferences were created or updated
         if (preference_exists):

@@ -46,7 +46,7 @@ class HabitController(Controller):
         await habits_repo.add(habit, auto_commit=True, auto_expunge=True)
 
         # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
         return habit
 
@@ -77,14 +77,14 @@ class HabitController(Controller):
         await habits_repo.update(habit, auto_commit=True)
 
         # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
     @delete(path="/{habit_name:str}")
     async def remove_habit(self, user: User, habit: Habit, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> None:
         await habits_repo.delete(habit.id, auto_commit=True)
 
         # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, [ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION])
+        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
     @post(path="/{habit_name:str}/completions", return_dto=HabitCompletionDTO)
     async def complete_habit(self, data: CompleteHabitInput, habit: Habit, habit_completions_repo: HabitCompletionRepository) -> HabitCompletion:
