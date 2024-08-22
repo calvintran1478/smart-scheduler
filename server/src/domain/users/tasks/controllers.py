@@ -5,6 +5,7 @@ from litestar.di import Provide
 
 from models.task import Task
 from models.user import User
+from models.schedule_item import ScheduleItemTypeEnum
 from domain.users.tasks.repositories import TaskRepository
 from domain.users.tasks.dependencies import provide_tasks_repo, provide_task
 from domain.users.tasks.schemas import CreateTaskInput, UpdateTaskInput
@@ -13,16 +14,23 @@ from domain.users.tasks.hooks import after_task_get_request
 from domain.users.tasks.validators import check_timezone
 from domain.users.tags.repositories import TagRepository
 from domain.users.tags.dependencies import provide_tags_repo
+from domain.users.schedules.repositories import ScheduleRepository
+from domain.users.schedules.dependencies import provide_schedules_repo
 from lib.time import convert_to_utc
 
 from datetime import datetime
 from typing import Optional
 
 class TaskController(Controller):
-    dependencies = {"tasks_repo": Provide(provide_tasks_repo), "tags_repo": Provide(provide_tags_repo), "task": Provide(provide_task)}
+    dependencies = {
+        "tasks_repo": Provide(provide_tasks_repo),
+        "tags_repo": Provide(provide_tags_repo),
+        "schedules_repo": Provide(provide_schedules_repo),
+        "task": Provide(provide_task)
+    }
 
     @post(path="/", return_dto=TaskDTO)
-    async def create_task(self, data: CreateTaskInput, user: User, tasks_repo: TaskRepository, tags_repo: TagRepository) -> Task:
+    async def create_task(self, data: CreateTaskInput, user: User, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> Task:
         # Check tag exists if one was included
         tag_id = None
         if (data.tag != None):
@@ -40,8 +48,11 @@ class TaskController(Controller):
             user_id = user.id
         )
 
-        await tasks_repo.add(task, auto_commit=True)
+        await tasks_repo.add(task, auto_commit=True, auto_expunge=True)
         task.deadline = task.deadline.astimezone(data.timezone)
+
+        # Mark schedules for refresh
+        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
 
         return task
 
@@ -59,7 +70,7 @@ class TaskController(Controller):
         return tasks
 
     @patch(path="/{task_id:str}", status_code=HTTP_204_NO_CONTENT)
-    async def update_task(self, data: UpdateTaskInput, user: User, task: Task, tasks_repo: TaskRepository, tags_repo: TagRepository) -> None:      
+    async def update_task(self, data: UpdateTaskInput, user: User, task: Task, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> None:      
         # Handle tag update
         if (data.tag != None):
             task.tag = await tags_repo.get_one_or_none(user_id=user.id, name=data.tag)
@@ -73,9 +84,15 @@ class TaskController(Controller):
 
         await tasks_repo.update(task, auto_commit=True)
 
+        # Mark schedules for refresh
+        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
+
     @delete(path="/{task_id:str}")
-    async def remove_task(self, task: Task, tasks_repo: TaskRepository) -> None:
+    async def remove_task(self, user: User, task: Task, tasks_repo: TaskRepository, schedules_repo: ScheduleRepository) -> None:
         await tasks_repo.delete(task.id, auto_commit=True)
+
+        # Mark schedules for refresh
+        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
 
     @delete(path="/{task_id:str}/tag")
     async def remove_task_tag(self, task: Task, tasks_repo: TaskRepository) -> None:

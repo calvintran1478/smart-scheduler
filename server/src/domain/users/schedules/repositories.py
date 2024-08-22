@@ -31,11 +31,14 @@ class ScheduleRepository(SQLAlchemyAsyncRepository[Schedule]):
                     await self.session.execute(statement=update(Schedule).where(Schedule.user_id == user_id).values(requires_work_refresh = True))
         await self.session.commit()
 
-    async def refresh_schedule(self, user: User, schedule: Schedule, preferences_repo: PreferenceRepository, events_repo: EventRepository, habits_repo: HabitRepository, timezone_format: timezone) -> None:
+    async def refresh_schedule(self, user: User, schedule: Schedule, preferences_repo: PreferenceRepository, events_repo: EventRepository, habits_repo: HabitRepository, tasks_repo: TaskRepository, timezone_format: timezone) -> None:
+        # Get remaining schedules for the week in case work distribution needs modification
+        schedules = await self.list(Schedule.user_id == user.id, Schedule.date >= schedule.date)
+
         # Generate schedule
         schedule_builder = ScheduleBuilder(schedule)
         schedule_director = ScheduleDirector()
-        await schedule_director.generate_schedule(schedule_builder, user, preferences_repo, events_repo, habits_repo, timezone_format)
+        await schedule_director.generate_schedule(schedule_builder, user, schedules, preferences_repo, events_repo, habits_repo, tasks_repo, timezone_format)
 
         # Save schedule
         await self.update(schedule, auto_commit=True)

@@ -57,7 +57,7 @@ class ScheduleController(Controller):
 
         # Otherwise return the schedule after refreshing it if necessary
         elif (requires_refresh(schedule, timezone)):
-            await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
+            await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, tasks_repo, check_timezone(timezone))
 
         return schedule
 
@@ -80,7 +80,7 @@ class ScheduleController(Controller):
             weekly_schedule = await schedules_repo.create_weekly_schedule(user, schedule_date, preferences_repo, events_repo, habits_repo, tasks_repo, check_timezone(timezone))
             schedule = weekly_schedule[schedule_date.weekday()]
         elif (requires_refresh(schedule, timezone)):
-            await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, check_timezone(timezone))
+            await schedules_repo.refresh_schedule(user, schedule, preferences_repo, events_repo, habits_repo, tasks_repo, check_timezone(timezone))
 
         # Add a new focus session to the schedule
         if (data.start_time == None):

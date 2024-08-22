@@ -11,13 +11,15 @@ from domain.users.habits.repositories import HabitRepository
 from domain.users.tasks.repositories import TaskRepository
 from lib.time import convert_to_utc, get_time_difference, seconds_to_time_object, get_time_blocks, get_time_obj_blocks, get_schedule_time_blocks, SECONDS_PER_DAY, DAYS_PER_WEEK, START_OF_DAY, END_OF_DAY
 from lib.constraint import schedule_daily_items, schedule_weekly_items
-from lib.strategy import ChipStrategy
-from datetime import date, datetime, timedelta
+from lib.strategy import WorkStrategy, ChipStrategy
+from datetime import date, datetime, timedelta, time
 from pytz import timezone
 from math import floor
 from copy import deepcopy
 from collections.abc import Sequence
 from typing import Optional
+
+import pytz
 
 type ScheduleItemDetails = tuple[str, int, ScheduleItemTypeEnum, bool]
 
@@ -107,6 +109,28 @@ def remove_weekly_habit_sessions(schedules: Sequence[Schedule], weekly_habit_nam
         ]
 
     return locked_schedule_items, non_locked_schedule_items
+
+class TimeDistributionPlanner:
+    strategy: WorkStrategy
+
+    def __init__(self, strategy: WorkStrategy) -> None:
+        self.strategy = strategy
+    
+    def distribute_work_hours(self, schedules_to_plan: Sequence[Schedule], tasks: Sequence[Task], preference: Preference, start_time: time, timezone: pytz.timezone) -> None:
+        work_plan = self.strategy.execute(schedules_to_plan, tasks, preference, start_time, timezone)
+
+        for schedule in schedules_to_plan:
+            for assigned_focus_block in work_plan[schedule]:
+                assigned_task = next(task for task in tasks if task.id == assigned_focus_block[0])
+                focus_session = ScheduleItem(
+                    name=assigned_task.name,
+                    start_time=START_OF_DAY,
+                    end_time=seconds_to_time_object(assigned_focus_block[1]),
+                    locked=False,
+                    schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION
+                )
+                schedule.schedule_items.append(focus_session)
+                schedule.requires_work_refresh = True
 
 class ScheduleBuilder:
     schedule: Schedule
@@ -418,29 +442,11 @@ class WeeklyScheduleBuilder:
             for i, schedule_items in enumerate(scheduled_weekly_habits):
                 self.schedules[i].schedule_items += schedule_items
 
-    def schedule_work_sessions(self, schedule_date: date, timezone_format: timezone, tasks: Sequence[Task], preference: Optional[Preference] = None) -> None:
-        schedules_to_plan = tuple(schedule for schedule in self.schedules if schedule.date >= schedule_date)
-        strategy = ChipStrategy()
-        work_plan = strategy.execute(schedules_to_plan, tasks, preference, START_OF_DAY, timezone_format)
-
-        for schedule in schedules_to_plan:
-            for assigned_focus_block in work_plan[schedule]:
-                assigned_task = next(task for task in tasks if task.id == assigned_focus_block[0])
-                focus_session = ScheduleItem(
-                    name=assigned_task.name,
-                    start_time=START_OF_DAY,
-                    end_time=seconds_to_time_object(assigned_focus_block[1]),
-                    locked=False,
-                    schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION
-                )
-                schedule.schedule_items.append(focus_session)
-                schedule.requires_work_refresh = True
-        
-        schedule_builder = ScheduleBuilder(self.schedules[0])
-        for schedule in self.schedules:
-            if (schedule.requires_work_refresh):
-                schedule_builder.schedule = schedule
-                schedule_builder.schedule_work_sessions(preference)
+    def schedule_work_sessions(self, schedule_date: date, timezone_format: timezone, preference: Optional[Preference] = None) -> None:
+        schedule_to_refresh = next(schedule for schedule in self.schedules if schedule.date == schedule_date)
+        if (schedule_to_refresh.requires_work_refresh):
+            schedule_builder = ScheduleBuilder(schedule_to_refresh)
+            schedule_builder.schedule_work_sessions(preference)
 
 class ScheduleDirector:
 
@@ -448,9 +454,11 @@ class ScheduleDirector:
         self,
         builder: ScheduleBuilder,
         user: User,
+        schedules: Sequence[Schedule],
         preferences_repo: PreferenceRepository,
         events_repo: EventRepository,
         habits_repo: HabitRepository,
+        tasks_repo: TaskRepository,
         timezone_format: timezone
     ) -> None:
         # Check for timezone change
@@ -465,6 +473,11 @@ class ScheduleDirector:
         preference = None
         if (builder.schedule.requires_sleep_refresh or builder.schedule.requires_work_refresh):
             preference = await preferences_repo.get_one_or_none(user_id = user.id)
+
+        # Clear previously planned focus sessions
+        if (builder.schedule.requires_work_refresh):
+            for schedule in schedules:
+                schedule.schedule_items = [schedule_item for schedule_item in schedule.schedule_items if schedule_item.schedule_item_type != ScheduleItemTypeEnum.FOCUS_SESSION]
 
         # Schedule sleep hours
         if (builder.schedule.requires_sleep_refresh):
@@ -481,6 +494,14 @@ class ScheduleDirector:
 
         # Schedule work sessions
         if (builder.schedule.requires_work_refresh):
+            # Fetch tasks
+            tasks = await tasks_repo.list(user_id = user.id, done = False)
+
+            # Determine distribution of focus sessions based on some work strategy
+            strategy = ChipStrategy()
+            time_planner = TimeDistributionPlanner(strategy)
+            time_planner.distribute_work_hours(schedules, tasks, preference, START_OF_DAY, timezone_format)
+
             builder.schedule_work_sessions(preference)
 
 class WeeklyScheduleDirector:
@@ -511,6 +532,14 @@ class WeeklyScheduleDirector:
         if any(schedule.requires_sleep_refresh or schedule.requires_work_refresh for schedule in builder.schedules):
             preference = await preferences_repo.get_one_or_none(user_id = user.id)
 
+        # Get schedules for remaining days of the week
+        schedules_to_plan = tuple(schedule for schedule in builder.schedules if schedule.date >= schedule_date)
+
+        # Clear previously planned focus sessions
+        if any(schedule.requires_work_refresh for schedule in schedules_to_plan):
+            for schedule in schedules_to_plan:
+                schedule.schedule_items = [schedule_item for schedule_item in schedule.schedule_items if schedule_item.schedule_item_type != ScheduleItemTypeEnum.FOCUS_SESSION]
+
         # Schedule sleep hours
         if any(schedule.requires_sleep_refresh for schedule in builder.schedules):
             builder.schedule_sleep_hours(preference)
@@ -525,6 +554,13 @@ class WeeklyScheduleDirector:
             builder.schedule_habits(habits)
 
         # Schedule work sessions
-        if any(schedule.requires_work_refresh for schedule in builder.schedules):
-            tasks = await tasks_repo.list(user_id = user.id)
-            builder.schedule_work_sessions(schedule_date, timezone_format, tasks, preference)
+        if any(schedule.requires_work_refresh for schedule in schedules_to_plan):
+            # Fetch tasks
+            tasks = await tasks_repo.list(user_id = user.id, done = False)
+
+            # Determine distribution of focus sessions based on some work strategy
+            strategy = ChipStrategy()
+            time_planner = TimeDistributionPlanner(strategy)
+            time_planner.distribute_work_hours(schedules_to_plan, tasks, preference, START_OF_DAY, timezone_format)
+
+            builder.schedule_work_sessions(schedule_date, timezone_format, preference)
