@@ -153,4 +153,10 @@ export default defineComponent({
   font-size: 20px;
   text-align: center;
 }
+
+.error-message {
+  color: red;
+  margin-bottom: 20px;
+  text-align: center;
+}
 </style>
