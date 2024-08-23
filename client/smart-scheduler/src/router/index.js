@@ -7,6 +7,7 @@ import Tasks from '../views/Tasks.vue'
 import Habits from '../views/Habits.vue'
 import Pomodoro from '../views/Pomodoro.vue'
 import Timetable from '../views/Timetable.vue'
+import Events from '../views/Events.vue' 
 
 const routes = [
   {
@@ -52,6 +53,11 @@ const routes = [
     path: '/timetable',
     name: 'Timetable',
     component: Timetable
+  },
+  {
+    path: '/events',
+    name: 'Events',
+    component: Events
   }
 ]
 
