@@ -10,7 +10,7 @@ async def provide_tags_repo(db_session: AsyncSession) -> TagRepository:
 
 async def provide_tag(user: User, tag_name: str, tags_repo: TagRepository) -> Tag:
     """This provides the tag belonging to the user identified by the tag name"""
-    tag = await tags_repo.get_one_or_none(user_id=user.id, name=tag_name)
+    tag = await tags_repo.get_one_or_none(user_id=user.id, name=tag_name, auto_expunge=True)
     if (tag == None):
         raise NotFoundException(detail="Tag not found")
 

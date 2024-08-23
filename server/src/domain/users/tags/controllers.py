@@ -1,6 +1,8 @@
 from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT, HTTP_409_CONFLICT
 from litestar.exceptions import ClientException, NotFoundException
+from litestar.response import ServerSentEvent
+from litestar.channels import ChannelsPlugin
 from litestar.di import Provide
 
 from models.user import User
@@ -10,12 +12,17 @@ from domain.users.tags.dependencies import provide_tags_repo, provide_tag
 from domain.users.tags.schemas import CreateTagInput, UpdateTagInput
 from domain.users.tags.dtos import TagDTO
 from domain.users.tags.hooks import after_tag_get_request
+from lib.sse import sse_generator
 
 class TagController(Controller):
     dependencies = {"tags_repo": Provide(provide_tags_repo), "tag": Provide(provide_tag)}
 
+    @get(path="/sse", sync_to_thread=False)
+    def sse_handler(self, channels: ChannelsPlugin, user: User) -> ServerSentEvent:
+        return ServerSentEvent(sse_generator(channels, user, "tags"))
+
     @post(path="/", return_dto=TagDTO)
-    async def create_tag(self, data: CreateTagInput, user: User, tags_repo: TagRepository) -> Tag:
+    async def create_tag(self, data: CreateTagInput, channels: ChannelsPlugin, user: User, tags_repo: TagRepository) -> Tag:
         # Check if user has a tag with the given name
         tag_exists = await tags_repo.exists(user_id=user.id, name=data.name)
         if tag_exists:
@@ -23,16 +30,19 @@ class TagController(Controller):
 
         # Create tag for the user
         tag = Tag(user_id=user.id, name=data.name, colour=data.colour)
-        await tags_repo.add(tag, auto_commit=True)
+        await tags_repo.add(tag, auto_expunge=True)
+
+        # Send server event
+        channels.publish({"event": "tag added", "tag": {"name": tag.name, "colour": tag.colour}}, f"tags_{user.id}")
 
         return tag
 
     @get(path="/", return_dto=TagDTO, after_request=after_tag_get_request)
     async def get_tags(self, user: User, tags_repo: TagRepository) -> list[Tag]:
-        return await tags_repo.list(user_id = user.id)
+        return await tags_repo.list(user_id = user.id, auto_expunge=True)
 
     @patch(path="/{tag_name:str}", status_code=HTTP_204_NO_CONTENT)
-    async def update_tag(self, data: UpdateTagInput, user: User, tag: Tag, tags_repo: TagRepository) -> None:
+    async def update_tag(self, data: UpdateTagInput, channels: ChannelsPlugin, user: User, tag: Tag, tags_repo: TagRepository) -> None:
         # Check if any other tags have the same name as the updated value
         if (data.name != None and data.name != tag.name):
             name_exists = await tags_repo.exists(user_id=user.id, name=data.name)
@@ -46,8 +56,14 @@ class TagController(Controller):
         if (data.colour != None):
             tag.colour = data.colour
 
-        await tags_repo.update(tag, auto_commit=True)
+        await tags_repo.update(tag, auto_expunge=True)
+
+        # Send server event
+        channels.publish({"event": "tag updated", "tag": {"name": tag.name, "colour": tag.colour}}, f"tags_{user.id}")
 
     @delete(path="/{tag_name:str}")
-    async def remove_tag(self, tag: Tag, tags_repo: TagRepository) -> None:
-        await tags_repo.delete(tag.id)
+    async def remove_tag(self, channels: ChannelsPlugin, user: User, tag: Tag, tags_repo: TagRepository) -> None:
+        await tags_repo.delete(tag.id, auto_expunge=True)
+
+        # Send server event
+        channels.publish({"event": "tag deleted", "tag_name": tag.name}, f"tags_{user.id}")
