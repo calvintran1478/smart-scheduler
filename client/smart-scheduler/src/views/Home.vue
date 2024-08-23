@@ -40,9 +40,9 @@
               </ion-button>
             </ion-col>
             <ion-col size="6">
-              <ion-button fill="clear" expand="block" router-link="/analytics" class="home-button">
-                <ion-icon :icon="analyticsOutline" class="home-icon"></ion-icon>
-                <ion-label class="home-label">Analytics</ion-label>
+              <ion-button fill="clear" expand="block" router-link="/events" class="home-button">
+                <ion-icon :icon="navigateOutline" class="home-icon"></ion-icon>
+                <ion-label class="home-label">Events</ion-label>
               </ion-button>
             </ion-col>
           </ion-row>
@@ -78,7 +78,7 @@ import {
   checkmarkDoneOutline,
   repeatOutline,
   settingsOutline,
-  analyticsOutline
+  navigateOutline
 } from "ionicons/icons";
 import { refreshToken, logout } from "../services/auth";
 
@@ -100,7 +100,7 @@ export default defineComponent({
       checkmarkDoneOutline,
       repeatOutline,
       settingsOutline,
-      analyticsOutline,
+      navigateOutline,
       refreshed: false,
     };
   },
