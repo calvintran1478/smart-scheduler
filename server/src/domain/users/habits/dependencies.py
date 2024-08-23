@@ -14,7 +14,7 @@ async def provide_habit_completions_repo(db_session: AsyncSession) -> HabitCompl
 
 async def provide_habit(user: User, habit_name: str, habits_repo: HabitRepository) -> Habit:
     """This provides the habit belonging to the user identified by the habit name"""
-    habit = await habits_repo.get_one_or_none(user_id=user.id, name=habit_name)
+    habit = await habits_repo.get_one_or_none(user_id=user.id, name=habit_name, auto_expunge=True)
     if (habit == None):
         raise NotFoundException(detail="Habit not found")
 
