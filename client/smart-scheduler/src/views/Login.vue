@@ -8,6 +8,7 @@
       </div>
 
       <div class="container">
+        <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
         <ion-item>
           <ion-input v-model="email" label="Email"></ion-input>
         </ion-item>
@@ -54,11 +55,14 @@ export default defineComponent({
     return {
       email: "",
       password: "",
+      errorMessage: "",
     };
   },
   methods: {
     async login() {
       try {
+        this.errorMessage = "";
+
         const deviceId = getDeviceId();
         const response = await fetch("http://localhost:8000/api/v1/users/login", {
           method: "POST",
@@ -74,6 +78,18 @@ export default defineComponent({
         });
         if (!response.ok) {
           throw new Error("Login failed");
+        }
+        if (response.status === 400) {
+          this.errorMessage = "Malformed request. Please try again.";
+        }
+        else if (response.status === 404) {
+          this.errorMessage = "Email not found. Please try again.";
+        }
+        else if (response.status === 401) {
+          this.errorMessage = "Incorrect password. Please try again.";
+        }
+        else if (response.status === 500) {
+          this.errorMessage = "Internal server error. Please try again.";
         }
         const data = await response.json();
         if (!data.access_token) {
