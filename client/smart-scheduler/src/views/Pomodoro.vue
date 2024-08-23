@@ -160,12 +160,40 @@ export default defineComponent({
       }
       this.isTimerRunning = false;
     },
-    endSession() {
+    async endSession() {
       if (this.timer) {
         clearInterval(this.timer);
       }
       this.isTimerRunning = false;
       this.isBreak = false;
+
+      // record time spent on task
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
+      const response = await fetch(
+        `http://localhost:8000/api/v1/users/tasks/${taskId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            minutes_completed: this.time/60,
+            timezone: timezone,
+          }),
+        }
+      );
+      if (response.ok) {
+        console.log("Updated task successfully.")
+      } else {
+        throw new Error("Failed to update task.");
+      }
       this.time = 0;
     },
   },
