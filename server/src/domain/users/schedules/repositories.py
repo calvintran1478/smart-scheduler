@@ -19,17 +19,23 @@ class ScheduleRepository(SQLAlchemyAsyncRepository[Schedule]):
     model_type = Schedule
 
     async def mark_schedules_for_refresh(self, user_id: UUID, schedule_item_types: Sequence[ScheduleItemTypeEnum]) -> None:
+        schedules = await self.list(user_id = user_id, auto_expunge=True)
         for schedule_item_type in schedule_item_types:
             match schedule_item_type:
                 case ScheduleItemTypeEnum.EVENT:
-                    await self.session.execute(statement=update(Schedule).where(Schedule.user_id == user_id).values(requires_event_refresh = True))
+                    for schedule in schedules:
+                        schedule.requires_event_refresh = True
                 case ScheduleItemTypeEnum.HABIT:
-                    await self.session.execute(statement=update(Schedule).where(Schedule.user_id == user_id).values(requires_habit_refresh = True))
+                    for schedule in schedules:
+                        schedule.requires_habit_refresh = True
                 case ScheduleItemTypeEnum.SLEEP:
-                    await self.session.execute(statement=update(Schedule).where(Schedule.user_id == user_id).values(requires_sleep_refresh = True))
+                    for schedule in schedules:
+                        schedule.requires_sleep_refresh = True
                 case ScheduleItemTypeEnum.FOCUS_SESSION:
-                    await self.session.execute(statement=update(Schedule).where(Schedule.user_id == user_id).values(requires_work_refresh = True))
-        await self.session.commit()
+                    for schedule in schedules:
+                        schedule.requires_work_refresh = True
+
+        await self.update_many(schedules, auto_expunge=True)
 
     async def refresh_schedule(self, user: User, schedule: Schedule, preferences_repo: PreferenceRepository, events_repo: EventRepository, habits_repo: HabitRepository, tasks_repo: TaskRepository, timezone_format: timezone) -> None:
         # Get remaining schedules for the week in case work distribution needs modification

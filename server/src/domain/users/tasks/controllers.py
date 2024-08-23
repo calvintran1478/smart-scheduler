@@ -1,6 +1,8 @@
 from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT
 from litestar.exceptions import NotFoundException
+from litestar.response import ServerSentEvent
+from litestar.channels import ChannelsPlugin
 from litestar.di import Provide
 
 from models.task import Task
@@ -17,6 +19,7 @@ from domain.users.tags.dependencies import provide_tags_repo
 from domain.users.schedules.repositories import ScheduleRepository
 from domain.users.schedules.dependencies import provide_schedules_repo
 from lib.time import convert_to_utc
+from lib.sse import sse_generator
 
 from datetime import datetime
 from typing import Optional
@@ -29,30 +32,47 @@ class TaskController(Controller):
         "task": Provide(provide_task)
     }
 
+    @get(path="/sse", sync_to_thread=False)
+    def sse_handler(self, channels: ChannelsPlugin, user: User) -> ServerSentEvent:
+        return ServerSentEvent(sse_generator(channels, user, "tasks"))
+
     @post(path="/", return_dto=TaskDTO)
-    async def create_task(self, data: CreateTaskInput, user: User, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> Task:
+    async def create_task(self, data: CreateTaskInput, channels: ChannelsPlugin, user: User, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> Task:
         # Check tag exists if one was included
-        tag_id = None
+        tag = None
         if (data.tag != None):
-            tag = await tags_repo.get_one_or_none(user_id=user.id, name=data.tag)
+            tag = await tags_repo.get_one_or_none(user_id=user.id, name=data.tag, auto_expunge=True)
             if (tag == None):
                 raise NotFoundException(detail="Tag not found")
-            tag_id = tag.id
 
         # Create task for the user
         task = Task(
             name = data.name,
             deadline = convert_to_utc(data.timezone, datetime.combine(data.deadline_date, data.deadline_time)),
             time_estimate = data.time_estimate,
-            tag_id = tag_id,
+            tag = tag,
             user_id = user.id
         )
 
-        await tasks_repo.add(task, auto_commit=True, auto_expunge=True)
+        await tasks_repo.add(task, auto_expunge=True)
         task.deadline = task.deadline.astimezone(data.timezone)
 
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
+
+        # Send server event
+        channels.publish({
+            "event": "task added",
+            "task": {
+                "task_id": task.id,
+                "name": task.name,
+                "deadline_date": task.deadline,
+                "time_estimate": task.time_estimate,
+                "minutes_completed": task.minutes_completed,
+                "done": task.done,
+                "tag": (None if data.tag == None else {"name": tag.name, "colour": tag.colour})
+            }
+        }, f"tasks_{user.id}")
 
         return task
 
@@ -70,10 +90,10 @@ class TaskController(Controller):
         return tasks
 
     @patch(path="/{task_id:str}", status_code=HTTP_204_NO_CONTENT)
-    async def update_task(self, data: UpdateTaskInput, user: User, task: Task, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> None:      
+    async def update_task(self, data: UpdateTaskInput, channels: ChannelsPlugin, user: User, task: Task, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> None:      
         # Handle tag update
         if (data.tag != None):
-            task.tag = await tags_repo.get_one_or_none(user_id=user.id, name=data.tag)
+            task.tag = await tags_repo.get_one_or_none(user_id=user.id, name=data.tag, auto_expunge=True)
             if (task.tag == None):
                 raise NotFoundException(detail="Tag not found")
 
@@ -82,23 +102,43 @@ class TaskController(Controller):
             if attribute_value != None and attribute_name not in ["tag", "timezone"]:
                 setattr(task, attribute_name, attribute_value)
 
-        await tasks_repo.update(task, auto_commit=True)
+        await tasks_repo.update(task, auto_commit=True, auto_expunge=True)
 
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
 
+        # Send server event
+        channels.publish({
+            "event": "task updated",
+            "task": {
+                "task_id": task.id,
+                "name": task.name,
+                "deadline_date": task.deadline,
+                "time_estimate": task.time_estimate,
+                "minutes_completed": task.minutes_completed,
+                "done": task.done,
+                "tag": (None if data.tag == None else {"name": task.tag.name, "colour": task.tag.colour})
+            }
+        }, f"tasks_{user.id}")
+
     @delete(path="/{task_id:str}")
-    async def remove_task(self, user: User, task: Task, tasks_repo: TaskRepository, schedules_repo: ScheduleRepository) -> None:
+    async def remove_task(self, channels: ChannelsPlugin, user: User, task: Task, tasks_repo: TaskRepository, schedules_repo: ScheduleRepository) -> None:
         await tasks_repo.delete(task.id, auto_commit=True)
 
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
 
+        # Send server event
+        channels.publish({"event": "task deleted", "task_id": task.id}, f"tasks_{user.id}")
+
     @delete(path="/{task_id:str}/tag")
-    async def remove_task_tag(self, task: Task, tasks_repo: TaskRepository) -> None:
+    async def remove_task_tag(self, channels: ChannelsPlugin, user: User, task: Task, tasks_repo: TaskRepository) -> None:
         # Remove tag from task
         if (task.tag == None):
             raise NotFoundException(detail="Tag not found")
         task.tag = None
 
         await tasks_repo.update(task, auto_commit=True)
+
+        # Send server event
+        channels.publish({"event": "task tag removed", "task_id": task.id}, f"tasks_{user.id}")
