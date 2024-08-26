@@ -25,7 +25,7 @@ class PreferenceController(Controller):
         schedules_repo: ScheduleRepository
     ) -> Response:
         # Check existence of preference settings
-        preference_result = await preferences_repo.get_one_or_none(user_id=user.id)
+        preference_result = await preferences_repo.get_one_or_none(user_id=user.id, auto_expunge=True)
         preference_exists = (preference_result != None)
 
         # Create new preference
@@ -73,29 +73,17 @@ class PreferenceController(Controller):
                 ScheduleItemTypeEnum.FOCUS_SESSION
             })
 
-        # Update preferences
-        if (preference_exists):
-            preference.id = preference_result.id
-            await preferences_repo.update(preference, auto_commit=True)
-        else:
-            await preferences_repo.add(preference, auto_commit=True)
-
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, tuple(schedule_item_types_to_refresh))
 
-        # Send appropriate response based on whether preferences were created or updated
+        # Set preferences and send appropriate response based on whether preferences were created or updated
         if (preference_exists):
+            preference.id = preference_result.id
+            await preferences_repo.update(preference, auto_expunge=True)
             return Response(content="", status_code=HTTP_204_NO_CONTENT)
         else:
-            preference_representation = {
-                "wake_up_time": data.wake_up_time,
-                "sleep_time": data.sleep_time,
-                "start_of_work_day": data.start_of_work_day,
-                "end_of_work_day": data.end_of_work_day,
-                "break_length": data.break_length,
-                "best_focus_times": data.best_focus_times
-            }
-            return Response(content=preference_representation, status_code=HTTP_201_CREATED)
+            await preferences_repo.add(preference, auto_expunge=True)
+            return Response(content=data.__dict__, status_code=HTTP_201_CREATED)
 
     @get(path="/", return_dto=PreferenceDTO)
     async def get_preferences(
@@ -104,5 +92,5 @@ class PreferenceController(Controller):
         preferences_repo: PreferenceRepository
     ) -> Preference:
         # Get preferences
-        preferences = await preferences_repo.get_one_or_none(user_id = user.id)
+        preferences = await preferences_repo.get_one_or_none(user_id = user.id, auto_expunge=True)
         return preferences if (preferences != None) else Preference()
