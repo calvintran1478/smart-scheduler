@@ -41,26 +41,16 @@ def get_time_blocks(start_time: time, end_time: time) -> list[TimeBlock]:
     end_timestamp = end_time.hour * 3600 + end_time.minute * 60 + end_time.second
 
     # Add 1 or 2 timeblocks depending if the time interval crosses over midnight
-    time_blocks = []
     if (start_timestamp > end_timestamp):
-        time_blocks.append((start_timestamp, SECONDS_PER_DAY))
-        if (end_timestamp != 0):
-            time_blocks.append((0, end_timestamp))
+        return [(start_timestamp, SECONDS_PER_DAY)] if (end_timestamp == 0) else [(start_timestamp, SECONDS_PER_DAY), (0, end_timestamp)]
     else:
-        time_blocks.append((start_timestamp, end_timestamp))
-
-    return time_blocks
+        return [(start_timestamp, end_timestamp)]
 
 def get_time_obj_blocks(start_time: time, end_time: time) -> list[tuple[time, time]]:
-    time_obj_blocks = []
     if (start_time > end_time):
-        time_obj_blocks.append((start_time, END_OF_DAY))
-        if (end_time != START_OF_DAY):
-            time_obj_blocks.append((START_OF_DAY, end_time))
+        return [(start_time, END_OF_DAY)] if (end_time == START_OF_DAY) else [(start_time, END_OF_DAY), (START_OF_DAY, end_time)]
     else:
-        time_obj_blocks.append((start_time, end_time))
-
-    return time_obj_blocks
+        return [(start_time, end_time)]
 
 def get_schedule_time_blocks(schedule: Schedule) -> list[TimeBlock]:
     return [
