@@ -2,6 +2,8 @@ from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT
 from litestar.dto import DTOData
 from litestar.exceptions import ClientException, NotFoundException
+from litestar.response import ServerSentEvent
+from litestar.channels import ChannelsPlugin
 from litestar.di import Provide
 
 from models.user import User
@@ -19,6 +21,7 @@ from domain.users.schedules.repositories import ScheduleRepository
 from domain.users.schedules.dependencies import provide_schedules_repo
 from lib.time import convert_to_utc, END_OF_DAY
 from lib.event import get_updated_event_instance_from_event
+from lib.sse import sse_generator
 
 from typing import Optional
 from datetime import datetime, time
@@ -32,8 +35,12 @@ class EventController(Controller):
         "event": Provide(provide_event)
     }
 
+    @get(path="/sse", sync_to_thread=False)
+    def sse_handler(self, channels: ChannelsPlugin, user: User) -> ServerSentEvent:
+        return ServerSentEvent(sse_generator(channels, user, "events"))
+
     @post(path="/", return_dto=EventDTO)
-    async def create_event(self, data: CreateEventInput, user: User, events_repo: EventRepository, schedules_repo: ScheduleRepository) -> Event:
+    async def create_event(self, data: CreateEventInput, channels: ChannelsPlugin, user: User, events_repo: EventRepository, schedules_repo: ScheduleRepository) -> Event:
         # Create event for the user
         event = Event(
             user_id=user.id,
@@ -46,10 +53,25 @@ class EventController(Controller):
             location=data.location,
         )
 
-        await events_repo.add(event, auto_commit=True, auto_expunge=True)
+        await events_repo.add(event, auto_expunge=True)
 
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+
+        # Send server event
+        channels.publish({
+            "event": "event added",
+            "user_event": {
+                "event_id": event.id,
+                "summary": event.summary,
+                "start_time": event.start_time,
+                "end_time": event.end_time,
+                "repeat_rule": event.repeat_rule,
+                "until": event.until,
+                "description": event.description,
+                "location": event.location
+            }
+        }, f"events_{user.id}")
 
         return event
 
@@ -66,6 +88,7 @@ class EventController(Controller):
     async def update_event(
         self,
         data: DTOData[UpdateEventInput],
+        channels: ChannelsPlugin,
         user: User,
         event: Event,
         events_repo: EventRepository,
@@ -103,6 +126,21 @@ class EventController(Controller):
 
                 # Mark schedules for refresh
                 await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+
+            # Send server event
+            channels.publish({
+                "event": "event updated",
+                "user_event": {
+                    "event_id": event.id,
+                    "summary": event.summary,
+                    "start_time": event.start_time.astimezone(update_data.timezone),
+                    "end_time": event.end_time.astimezone(update_data.timezone),
+                    "repeat_rule": event.repeat_rule,
+                    "until": event.until,
+                    "description": event.description,
+                    "location": event.location
+                }
+            }, f"events_{user.id}")
 
         # Update a particular instance of the event
         elif (start != None and timezone != None):
@@ -144,6 +182,21 @@ class EventController(Controller):
             if (update_data.timezone == None):
                 await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
+            # Send server event
+            channels.publish({
+                "event": "event updated",
+                "user_event": {
+                    "event_id": event.id,
+                    "summary": event.summary,
+                    "start_time": event.start_time,
+                    "end_time": event.end_time,
+                    "repeat_rule": event.repeat_rule,
+                    "until": event.until,
+                    "description": event.description,
+                    "location": event.location
+                }
+            }, f"events_{user.id}")
+
         # Handle missing query parameters
         else:
             raise ClientException(detail="Start and timezone query parameters must both appear or not at all")
@@ -151,6 +204,7 @@ class EventController(Controller):
     @delete(path="/{event_id:str}")
     async def remove_event(
         self,
+        channels: ChannelsPlugin,
         user: User,
         event: Event,
         events_repo: EventRepository,
@@ -162,10 +216,13 @@ class EventController(Controller):
     ) -> None:
         # Delete all instances of the event
         if (event.repeat_rule == "NEVER" or (start == timezone == None)):
-            await events_repo.delete(event.id, auto_commit=True)
+            await events_repo.delete(event.id, auto_expunge=True)
 
             # Mark schedules for refresh
             await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+
+            # Send server event
+            channels.publish({"event": "event deleted", "event_id": event.id}, f"events_{user.id}")
 
         # Delete a particular instance of the event
         elif (start != None and timezone != None):
@@ -179,7 +236,7 @@ class EventController(Controller):
 
             # Add exception date
             exception_date = ExceptionDate(start_time=start_time, event_id=event.id)
-            await exception_dates_repo.add(exception_date, auto_commit=True)
+            await exception_dates_repo.add(exception_date, auto_expunge=True)
 
             # Delete updated instance if one exists
             if (instance_type == "updated_instance"):
@@ -187,6 +244,9 @@ class EventController(Controller):
 
             # Mark schedules for refresh
             await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+
+            # Send server event
+            channels.publish({"event": "event deleted", "event_id": event.id}, f"events_{user.id}")
 
         # Handle missing query parameters
         else:

@@ -22,7 +22,7 @@ def check_timezone(timezone: str) -> pytz.timezone:
     except UnknownTimeZoneError:
         raise ClientException(detail="Invalid timezone")
 
-def validate_new_times(update_data, event: Event) -> tuple[datetime, datetime]:
+def validate_new_times(update_data, event: Event) -> tuple[datetime, datetime, Optional[datetime]]:
     # Calculate new time values
     new_start_time = convert_to_utc(update_data.timezone, update_data.start_time) \
         if (update_data.start_time != None) else event.start_time
