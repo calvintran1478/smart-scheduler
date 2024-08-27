@@ -1,6 +1,8 @@
 from litestar import Controller, post, get, patch, delete
 from litestar.status_codes import HTTP_204_NO_CONTENT, HTTP_409_CONFLICT
 from litestar.exceptions import ClientException, NotFoundException
+from litestar.response import ServerSentEvent
+from litestar.channels import ChannelsPlugin
 from litestar.di import Provide
 
 from models.schedule import Schedule
@@ -22,6 +24,7 @@ from domain.users.tasks.repositories import TaskRepository
 from domain.users.tasks.dependencies import provide_tasks_repo
 from lib.time import convert_to_utc, seconds_to_time_object, get_time_difference, SECONDS_PER_DAY
 from lib.schedule import requires_refresh, requires_week_refresh, ScheduleBuilder
+from lib.sse import sse_generator
 
 from datetime import date, timedelta
 from uuid import UUID
@@ -34,6 +37,10 @@ class ScheduleController(Controller):
         "habits_repo": Provide(provide_habits_repo),
         "tasks_repo": Provide(provide_tasks_repo)
     }
+
+    @get(path="/sse", sync_to_thread=False)
+    def sse_handler(self, channels: ChannelsPlugin, user: User) -> ServerSentEvent:
+        return ServerSentEvent(sse_generator(channels, user, "schedule"))
 
     @get(path="/{schedule_date:date}", return_dto=ScheduleDTO)
     async def get_schedule(
@@ -65,6 +72,7 @@ class ScheduleController(Controller):
     async def create_focus_session(
         self,
         data: CreateFocusSessionInput,
+        channels: ChannelsPlugin,
         user: User,
         schedule_date: date,
         schedules_repo: ScheduleRepository,
@@ -109,12 +117,24 @@ class ScheduleController(Controller):
 
             schedule.schedule_items.append(focus_session)
 
-        await schedules_repo.update(schedule, auto_commit=True)
+        await schedules_repo.update(schedule, auto_expunge=True)
+
+        # Send server event
+        channels.publish({
+            "event": "focus session added",
+            "focus_session": {
+                "schedule_item_id": focus_session.id,
+                "name": focus_session.name,
+                "start_time": focus_session.start_time,
+                "end_time": focus_session.end_time,
+                "schedule_item_type": focus_session.schedule_item_type
+            }
+        }, f"schedule_{user.id}")
 
         return focus_session
 
     @patch(path="/{schedule_date:date}/focus-sessions/{schedule_item_id:uuid}", status_code=HTTP_204_NO_CONTENT)
-    async def update_focus_session(self, data: UpdateFocusSessionInput, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+    async def update_focus_session(self, data: UpdateFocusSessionInput, channels: ChannelsPlugin, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
         # Get schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
         if (schedule == None):
@@ -139,10 +159,22 @@ class ScheduleController(Controller):
         if any(schedule_item.start_time < focus_session.end_time and schedule_item.end_time > focus_session.start_time and schedule_item.id != focus_session.id for schedule_item in schedule.schedule_items):
             raise ClientException(detail="New times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
 
-        await schedules_repo.update(schedule, auto_commit=True)
+        await schedules_repo.update(schedule, auto_expunge=True)
+
+        # Send server event
+        channels.publish({
+            "event": "focus session updated",
+            "focus_session": {
+                "schedule_item_id": focus_session.id,
+                "name": focus_session.name,
+                "start_time": focus_session.start_time,
+                "end_time": focus_session.end_time,
+                "schedule_item_type": focus_session.schedule_item_type,
+            }
+        }, f"schedule_{user.id}")
 
     @delete(path="/{schedule_date:date}/focus-sessions/{schedule_item_id:uuid}")
-    async def remove_focus_session(self, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+    async def remove_focus_session(self, channels: ChannelsPlugin, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
         # Fetch schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
         if (schedule == None):
@@ -151,15 +183,18 @@ class ScheduleController(Controller):
         # Remove focus session from schedule if it exists
         for i, schedule_item in enumerate(schedule.schedule_items):
             if (schedule_item.id == schedule_item_id and schedule_item.schedule_item_type == ScheduleItemTypeEnum.FOCUS_SESSION):
+                # Send server event
+                channels.publish({"event": "focus session deleted", "focus_session_id": schedule.schedule_items[i].id}, f"schedule_{user.id}")
+
                 del schedule.schedule_items[i]
                 return
 
         raise NotFoundException(detail="Focus session not found")
 
     @patch(path="/{schedule_date:date}/habit-sessions/{schedule_item_id:uuid}", status_code=HTTP_204_NO_CONTENT)
-    async def update_habit_session(self, data: UpdateHabitSessionInput, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+    async def update_habit_session(self, data: UpdateHabitSessionInput, channels: ChannelsPlugin, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
         # Get schedule
-        schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
+        schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date, auto_expunge=True)
         if (schedule == None):
             raise NotFoundException(detail="Habit session not found")
 
@@ -186,10 +221,22 @@ class ScheduleController(Controller):
         if any(schedule_item.start_time < habit_session.end_time and schedule_item.end_time > habit_session.start_time and schedule_item.id != habit_session.id for schedule_item in schedule.schedule_items):
             raise ClientException(detail="New times must not overlap with existing schedule items", status_code=HTTP_409_CONFLICT)
 
-        await schedules_repo.update(schedule, auto_commit=True)
+        await schedules_repo.update(schedule, auto_expunge=True)
+
+        # Send server event
+        channels.publish({
+            "event": "habit session updated",
+            "habit_session": {
+                "schedule_item_id": habit_session.id,
+                "name": habit_session.name,
+                "start_time": habit_session.start_time,
+                "end_time": habit_session.end_time,
+                "schedule_item_type": habit_session.schedule_item_type,
+            }
+        }, f"schedule_{user.id}")
 
     @delete(path="/{schedule_date:date}/habit-sessions/{schedule_item_id:uuid}")
-    async def remove_habit_session(self, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository, habits_repo: HabitRepository) -> None:
+    async def remove_habit_session(self, channels: ChannelsPlugin, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository, habits_repo: HabitRepository) -> None:
         # Get schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
         if (schedule == None):
@@ -202,7 +249,7 @@ class ScheduleController(Controller):
             raise NotFoundException(detail="Habit session not found")
 
         # If weekly habit session was removed reschedule to a new date
-        weekly_habits = await habits_repo.list(user_id=user.id, repeat_interval=RepeatIntervalEnum.WEEKLY)
+        weekly_habits = await habits_repo.list(user_id=user.id, repeat_interval=RepeatIntervalEnum.WEEKLY, auto_expunge=True)
         weekly_habit_names = tuple(habit.name for habit in weekly_habits)
         if (habit_session.name in weekly_habit_names):
             habit = next(habit for habit in weekly_habits if habit.name == habit_session.name)
@@ -210,11 +257,17 @@ class ScheduleController(Controller):
             for candidate_schedule in candidate_schedules:
                 schedule_builder = ScheduleBuilder(candidate_schedule)
                 try:
+                    # Send server event
+                    channels.publish({"event": "habit session deleted", "habit_session_id": habit_session.id}, f"schedule_{user.id}")
+
                     schedule_builder.add_habit_session(habit)
                     schedule.schedule_items.remove(habit_session)
                     return
                 except ClientException:
                     pass
+
+        # Send server event
+        channels.publish({"event": "habit session deleted", "habit_session_id": habit_session.id}, f"schedule_{user.id}")
 
         # Remove habit session from schedule
         schedule.schedule_items.remove(habit_session)
