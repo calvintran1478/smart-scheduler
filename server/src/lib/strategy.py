@@ -16,7 +16,7 @@ type AssignedFocusBlock = tuple[UUID, int] # Task id, duration in seconds
 
 class WorkStrategy(ABC):
 
-    def get_available_time_blocks(self, schedules: Sequence[Schedule], tasks: Sequence[Task], preference: Preference, start_time: time) -> dict[Schedule, list[int]]:
+    def get_available_time_blocks(self, schedules: Sequence[Schedule], preference: Preference, start_time: time) -> dict[Schedule, list[int]]:
         available_time_blocks = {schedule: [] for schedule in schedules}
         for schedule in schedules:
             # Get unavailable time blocks
@@ -75,7 +75,7 @@ class ChipStrategy(WorkStrategy):
                 session_length, num_sessions = self.break_down_work_time(required_seconds)
 
                 # Determine available times for each scheduled day
-                available_time_blocks = self.get_available_time_blocks(schedules, tasks, preference, start_time)
+                available_time_blocks = self.get_available_time_blocks(schedules, preference, start_time)
 
                 # Determine roughly how many sessions should be scheduled for each day
                 num_days = (date(task.deadline.year, task.deadline.month, task.deadline.day) - schedules[0].date).days + 1

@@ -79,7 +79,7 @@ class TaskController(Controller):
     @get(path="/", return_dto=TaskDTO, after_request=after_task_get_request)
     async def get_tasks(self, user: User, tasks_repo: TaskRepository, timezone: Optional[str] = None) -> list[Task]:
         # Get user tasks
-        tasks = await tasks_repo.list(user_id = user.id)
+        tasks = await tasks_repo.list(user_id = user.id, auto_expunge=True)
 
         # Convert deadlines to the specified timezone if one was given
         if (timezone != None):
@@ -102,7 +102,7 @@ class TaskController(Controller):
             if attribute_value != None and attribute_name not in ["tag", "timezone"]:
                 setattr(task, attribute_name, attribute_value)
 
-        await tasks_repo.update(task, auto_commit=True, auto_expunge=True)
+        await tasks_repo.update(task, auto_expunge=True)
 
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
@@ -123,7 +123,7 @@ class TaskController(Controller):
 
     @delete(path="/{task_id:str}")
     async def remove_task(self, channels: ChannelsPlugin, user: User, task: Task, tasks_repo: TaskRepository, schedules_repo: ScheduleRepository) -> None:
-        await tasks_repo.delete(task.id, auto_commit=True)
+        await tasks_repo.delete(task.id, auto_expunge=True)
 
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
@@ -138,7 +138,7 @@ class TaskController(Controller):
             raise NotFoundException(detail="Tag not found")
         task.tag = None
 
-        await tasks_repo.update(task, auto_commit=True)
+        await tasks_repo.update(task, auto_expunge=True)
 
         # Send server event
         channels.publish({"event": "task tag removed", "task_id": task.id}, f"tasks_{user.id}")

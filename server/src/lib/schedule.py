@@ -472,7 +472,7 @@ class ScheduleDirector:
         # Fetch preferences if needed
         preference = None
         if (builder.schedule.requires_sleep_refresh or builder.schedule.requires_work_refresh):
-            preference = await preferences_repo.get_one_or_none(user_id = user.id)
+            preference = await preferences_repo.get_one_or_none(user_id = user.id, auto_expunge=True)
 
         # Clear previously planned focus sessions
         if (builder.schedule.requires_work_refresh):
@@ -489,13 +489,13 @@ class ScheduleDirector:
 
         # Schedule habits
         if (builder.schedule.requires_habit_refresh):
-            daily_habits = await habits_repo.list(user_id = user.id, repeat_interval = RepeatIntervalEnum.DAILY)
+            daily_habits = await habits_repo.list(user_id = user.id, repeat_interval = RepeatIntervalEnum.DAILY, auto_expunge=True)
             builder.schedule_habits(daily_habits)
 
         # Schedule work sessions
         if (builder.schedule.requires_work_refresh):
             # Fetch tasks
-            tasks = await tasks_repo.list(user_id = user.id, done = False)
+            tasks = await tasks_repo.list(user_id = user.id, done = False, auto_expunge=True)
 
             # Determine distribution of focus sessions based on some work strategy
             strategy = ChipStrategy()
@@ -530,7 +530,7 @@ class WeeklyScheduleDirector:
         # Fetch preferences if needed
         preference = None
         if any(schedule.requires_sleep_refresh or schedule.requires_work_refresh for schedule in builder.schedules):
-            preference = await preferences_repo.get_one_or_none(user_id = user.id)
+            preference = await preferences_repo.get_one_or_none(user_id = user.id, auto_expunge=True)
 
         # Get schedules for remaining days of the week
         schedules_to_plan = tuple(schedule for schedule in builder.schedules if schedule.date >= schedule_date)
@@ -550,13 +550,13 @@ class WeeklyScheduleDirector:
 
         # Schedule habits
         if any(schedule.requires_habit_refresh for schedule in builder.schedules):
-            habits = await habits_repo.list(user_id = user.id)
+            habits = await habits_repo.list(user_id = user.id, auto_expunge=True)
             builder.schedule_habits(habits)
 
         # Schedule work sessions
         if any(schedule.requires_work_refresh for schedule in schedules_to_plan):
             # Fetch tasks
-            tasks = await tasks_repo.list(user_id = user.id, done = False)
+            tasks = await tasks_repo.list(user_id = user.id, done = False, auto_expunge=True)
 
             # Determine distribution of focus sessions based on some work strategy
             strategy = ChipStrategy()

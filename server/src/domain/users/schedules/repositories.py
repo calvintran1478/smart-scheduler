@@ -70,6 +70,6 @@ class ScheduleRepository(SQLAlchemyAsyncRepository[Schedule]):
         await schedule_director.generate_schedule(schedule_builder, user, schedule_date, preferences_repo, events_repo, habits_repo, tasks_repo, timezone_format)
 
         # Save schedules
-        await self.upsert_many(schedules)
+        await self.upsert_many(schedules, auto_expunge=True)
 
         return schedules
