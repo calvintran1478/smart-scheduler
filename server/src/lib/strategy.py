@@ -50,13 +50,24 @@ class WorkStrategy(ABC):
 
 class ChipStrategy(WorkStrategy):
 
-    def break_down_work_time(self, required_seconds: int) -> tuple[int, int]:
+    def break_down_work_time(self, required_seconds: int) -> list[int]:
+        # Calculate rough estimate of session length and number of sessions
         num_sessions = 1
         while ((required_seconds / num_sessions) > 90 * 60):
-           num_sessions += 1
+            num_sessions += 1
         session_length = ceil(required_seconds / num_sessions)
 
-        return session_length, num_sessions
+        # Round session lengths to the nearest multiple of 15 minutes
+        seconds_per_interval = 15 * 60
+        sessions = [session_length for _ in range(num_sessions)]
+        for i in range(num_sessions - 1):
+            rounded_session_length = round(sessions[i] / seconds_per_interval) * seconds_per_interval
+            offset = rounded_session_length - sessions[i]
+            sessions[i] += offset
+            sessions[i+1] -= offset
+
+        sessions.sort(reverse=True)
+        return sessions
 
     def execute(self, schedules: Sequence[Schedule], tasks: Sequence[Task], preference: Preference, start_time: time, timezone: pytz.timezone) -> dict[Schedule, list[AssignedFocusBlock]]:
         """
@@ -80,18 +91,18 @@ class ChipStrategy(WorkStrategy):
             # Plan focus sessions for the task if needed
             if (required_seconds >= 0 and not task.done):
                 # Determine how many sessions should be made for this task and how long each should be
-                session_length, num_sessions = self.break_down_work_time(required_seconds)
+                sessions = self.break_down_work_time(required_seconds)
 
                 # Determine available times for each scheduled day
                 available_time_blocks = self.get_available_time_blocks(schedules, preference, start_time, task.deadline)
 
                 # Determine roughly how many sessions should be scheduled for each day
                 num_days = (date(task.deadline.year, task.deadline.month, task.deadline.day) - schedules[0].date).days + 1
-                sessions_per_day = num_sessions / num_days
+                sessions_per_day = len(sessions) / num_days
 
                 # Initialize state variables for keeping track of how many sessions need to be scheduled
-                session_counter = ceil(sessions_per_day * len(schedules))
-                sessions_added = 0
+                total_sessions = ceil(sessions_per_day * len(schedules))
+                session_index = 0
                 schedule_index = 0
                 schedules_done = []
 
@@ -108,7 +119,7 @@ class ChipStrategy(WorkStrategy):
                     n = 7
 
                 # Iteratively add sessions from the current date in a cyclic manner until all sessions are assigned a date (or all schedules are full)
-                while (sessions_added < session_counter and len(schedules_done) < len(schedules)):
+                while (session_index < total_sessions and len(schedules_done) < len(schedules)):
                     if (schedule_index not in schedules_done):
                         # Get available times for this schedule
                         available_times = available_time_blocks[schedules[schedule_index]]
@@ -118,10 +129,11 @@ class ChipStrategy(WorkStrategy):
                         max_index = available_times.index(max_value)
 
                         # Add work session to the schedule if possible
+                        session_length = sessions[session_index]
                         if (session_length <= max_value):
                             work_plan[schedules[schedule_index]].append((task.id, session_length))
                             available_times[max_index] -= session_length
-                            sessions_added += 1
+                            session_index += 1
                         else:
                             schedules_done.append(schedule_index)
 
