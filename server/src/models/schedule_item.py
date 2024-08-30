@@ -3,6 +3,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.schema import ForeignKey, CheckConstraint
 from litestar.contrib.sqlalchemy.base import UUIDBase
 from datetime import time
+from typing import Optional
+from uuid import UUID
 import enum
 
 class ScheduleItemTypeEnum(str, enum.Enum):
@@ -21,5 +23,6 @@ class ScheduleItem(UUIDBase):
     locked: Mapped[bool] = mapped_column(default=False)
     schedule_item_type: Mapped[str] = mapped_column(Enum(ScheduleItemTypeEnum, name="schedule_item_type"))
     schedule_id: Mapped[int] = mapped_column(ForeignKey("schedules.id", ondelete="CASCADE", onupdate="CASCADE"))
+    ref_id: Mapped[Optional[UUID]]
 
     schedule: Mapped["Schedule"] = relationship(back_populates="schedule_items")

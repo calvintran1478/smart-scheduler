@@ -16,23 +16,31 @@ type AssignedFocusBlock = tuple[UUID, int] # Task id, duration in seconds
 
 class WorkStrategy(ABC):
 
-    def get_available_time_blocks(self, schedules: Sequence[Schedule], preference: Preference, start_time: time) -> dict[Schedule, list[int]]:
+    def get_available_time_blocks(self, schedules: Sequence[Schedule], preference: Preference, start_time: time, deadline: datetime) -> dict[Schedule, list[int]]:
         available_time_blocks = {schedule: [] for schedule in schedules}
         for schedule in schedules:
-            # Get unavailable time blocks
-            unavailable_time_blocks = get_schedule_time_blocks(schedule) + get_time_blocks(preference.end_of_work_day, preference.start_of_work_day)
-            unavailable_time_blocks.sort(key=itemgetter(0))
+            deadline_date = deadline.date()
 
-            # Compute available time blocks
-            start = 0
-            for time_block in unavailable_time_blocks:
-                end = time_block[0]
+            if (schedule.date <= deadline_date):
+                # Get unavailable time blocks based on existing schedule items and work preferences
+                unavailable_time_blocks = get_schedule_time_blocks(schedule) + get_time_blocks(preference.end_of_work_day, preference.start_of_work_day)
+
+                # In addition, mark times after the deadline as unavailable
+                if (schedule.date == deadline_date):
+                    unavailable_time_blocks += [(deadline.hour * 3600 + deadline.minute * 60 + deadline.second, SECONDS_PER_DAY)]
+
+                unavailable_time_blocks.sort(key=itemgetter(0))
+
+                # Compute available time blocks
+                start = 0
+                for time_block in unavailable_time_blocks:
+                    end = time_block[0]
+                    if (start != end):
+                        available_time_blocks[schedule].append(end - start)
+                    start = time_block[1]
+                end = SECONDS_PER_DAY
                 if (start != end):
                     available_time_blocks[schedule].append(end - start)
-                start = time_block[1]
-            end = SECONDS_PER_DAY
-            if (start != end):
-                available_time_blocks[schedule].append(end - start)
 
         return available_time_blocks
 
@@ -75,7 +83,7 @@ class ChipStrategy(WorkStrategy):
                 session_length, num_sessions = self.break_down_work_time(required_seconds)
 
                 # Determine available times for each scheduled day
-                available_time_blocks = self.get_available_time_blocks(schedules, preference, start_time)
+                available_time_blocks = self.get_available_time_blocks(schedules, preference, start_time, task.deadline)
 
                 # Determine roughly how many sessions should be scheduled for each day
                 num_days = (date(task.deadline.year, task.deadline.month, task.deadline.day) - schedules[0].date).days + 1

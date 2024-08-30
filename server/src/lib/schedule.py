@@ -80,8 +80,8 @@ def remove_schedule_items_by_type(schedule: Schedule, schedule_item_type: Schedu
     return locked_schedule_items, non_locked_schedule_items
 
 def get_previous_daily_items(locked_schedule_items: Sequence[ScheduleItem], non_locked_schedule_items: Sequence[ScheduleItem]) -> list[ScheduleItemDetails]:
-    return [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, True) for schedule_item in locked_schedule_items] + \
-        [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, False) for schedule_item in non_locked_schedule_items]
+    return [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, True, schedule_item.ref_id) for schedule_item in locked_schedule_items] + \
+        [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, False, schedule_item.ref_id) for schedule_item in non_locked_schedule_items]
 
 def remove_weekly_habit_sessions(schedules: Sequence[Schedule], weekly_habit_names: Sequence[str]) -> tuple[list[tuple[ScheduleItem, ...]], list[tuple[ScheduleItem, ...]]]:
     locked_schedule_items = []
@@ -127,7 +127,8 @@ class TimeDistributionPlanner:
                     start_time=START_OF_DAY,
                     end_time=seconds_to_time_object(assigned_focus_block[1]),
                     locked=False,
-                    schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION
+                    schedule_item_type=ScheduleItemTypeEnum.FOCUS_SESSION,
+                    ref_id=assigned_task.id
                 )
                 schedule.schedule_items.append(focus_session)
                 schedule.requires_work_refresh = True
@@ -177,6 +178,7 @@ class ScheduleBuilder:
                 start_time=START_OF_DAY if (event.start_time.date() < self.schedule.date) else event.start_time.time(),
                 end_time=END_OF_DAY if (event.end_time.date() > self.schedule.date) else event.end_time.time(),
                 schedule_item_type=ScheduleItemTypeEnum.EVENT,
+                ref_id=event.id
             ) for event in events
         ]
 
@@ -196,7 +198,7 @@ class ScheduleBuilder:
         for habit in daily_habits:
             num_habit_instances = sum((1 if daily_item[0] == habit.name else 0) for daily_item in daily_items)
             num_habit_instances_to_add = max(0, habit.frequency - num_habit_instances)
-            daily_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False)] * num_habit_instances_to_add
+            daily_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False, None)] * num_habit_instances_to_add
 
         # Get preferred times
         preferred_times = []
@@ -211,7 +213,8 @@ class ScheduleBuilder:
             preferred_times.append(curr_preferred_times)
 
         # Get occupied timeblocks
-        time_blocks = get_schedule_time_blocks(self.schedule)
+        schedule_time_blocks = get_schedule_time_blocks(self.schedule)
+        time_blocks = tuple(schedule_time_blocks for _ in range(len(daily_items)))
 
         # Preferred break length
         preferred_spacing = 3600 # Default one hour spacing for now
@@ -221,7 +224,7 @@ class ScheduleBuilder:
 
         self.schedule.requires_habit_refresh = False
 
-    def schedule_work_sessions(self, preference: Optional[Preference] = None) -> None:
+    def schedule_work_sessions(self, tasks: list[Task], preference: Optional[Preference] = None) -> None:
         # Remove previous work sessions
         locked_focus_sessions, non_locked_focus_sessions = remove_schedule_items_by_type(self.schedule, ScheduleItemTypeEnum.FOCUS_SESSION)
 
@@ -244,7 +247,15 @@ class ScheduleBuilder:
         best_focus_times = locked_best_focus_times + non_locked_best_focus_times
 
         # Get occupied timeblocks
-        time_blocks = get_schedule_time_blocks(self.schedule) + (get_time_blocks(preference.end_of_work_day, preference.start_of_work_day) if (preference != None) else [])
+        schedule_time_blocks = get_schedule_time_blocks(self.schedule) + (get_time_blocks(preference.end_of_work_day, preference.start_of_work_day) if (preference != None) else [])
+        time_blocks = [schedule_time_blocks for _ in range(len(daily_items))]
+        for i, daily_item in enumerate(daily_items):
+            try:
+                item_task = next(task for task in tasks if task.id == daily_item[4])
+                if (self.schedule.date == item_task.deadline.date()):
+                    time_blocks[i] = time_blocks[i] + [(item_task.deadline.hour * 3600 + item_task.deadline.minute * 60 + item_task.deadline.second, SECONDS_PER_DAY)]
+            except StopIteration:
+                pass
 
         # Preferred break length
         preferred_break_length = preference.break_length * 60 if (preference != None) else 0
@@ -259,7 +270,7 @@ class ScheduleBuilder:
         time_blocks = get_schedule_time_blocks(self.schedule) + (get_time_blocks(preference.end_of_work_day, preference.start_of_work_day) if (preference != None) else [])
 
         # Daily items
-        daily_items = ((name, duration, ScheduleItemTypeEnum.FOCUS_SESSION, False),)
+        daily_items = ((name, duration, ScheduleItemTypeEnum.FOCUS_SESSION, False, None),)
 
         # Best focus times
         best_focus_times = []
@@ -271,7 +282,7 @@ class ScheduleBuilder:
         preferred_break_length = 0
 
         # Schedule focus session
-        focus_session = schedule_daily_items(time_blocks, daily_items, (best_focus_times,), preferred_break_length)[0]
+        focus_session = schedule_daily_items((time_blocks,), daily_items, (best_focus_times,), preferred_break_length)[0]
         self.schedule.schedule_items.append(focus_session)
 
         return focus_session
@@ -281,7 +292,7 @@ class ScheduleBuilder:
         time_blocks = get_schedule_time_blocks(self.schedule)
 
         # Daily items
-        daily_items = ((habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False),)
+        daily_items = ((habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False, None),)
 
         # Preferred times
         preferred_times = []
@@ -294,7 +305,7 @@ class ScheduleBuilder:
         preferred_spacing = 0
 
         # Schedule habit session
-        habit_session = schedule_daily_items(time_blocks, daily_items, (preferred_times,), preferred_spacing)[0]
+        habit_session = schedule_daily_items((time_blocks,), daily_items, (preferred_times,), preferred_spacing)[0]
         self.schedule.schedule_items.append(habit_session)
 
         return habit_session
@@ -357,6 +368,7 @@ class WeeklyScheduleBuilder:
                         start_time=START_OF_DAY if (event.start_time.date() < schedule.date) else event.start_time.time(),
                         end_time=END_OF_DAY if (event.end_time.date() > schedule.date) else event.end_time.time(),
                         schedule_item_type=ScheduleItemTypeEnum.EVENT,
+                        ref_id=event.id
                     ) for event in events_for_the_day
                 ]
 
@@ -386,15 +398,15 @@ class WeeklyScheduleBuilder:
             locked_weekly_items = {}
             non_locked_weekly_items = {}
             for i in range(DAYS_PER_WEEK):
-                locked_weekly_items[i] = [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, True) for schedule_item in locked_weekly_habit_sessions[i]]
-                non_locked_weekly_items[i] = [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, False) for schedule_item in non_locked_weekly_habit_sessions[i]]
+                locked_weekly_items[i] = [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, True, None) for schedule_item in locked_weekly_habit_sessions[i]]
+                non_locked_weekly_items[i] = [(schedule_item.name, get_time_difference(schedule_item.start_time, schedule_item.end_time), schedule_item.schedule_item_type, False, None) for schedule_item in non_locked_weekly_habit_sessions[i]]
             weekly_items = sum(locked_weekly_items.values(), []) + sum(non_locked_weekly_items.values(), [])
 
             # Add missing habit sessions
             for habit in weekly_habits:
                 num_habit_instances = sum((1 if weekly_item[0] == habit.name else 0) for weekly_item in weekly_items)
                 num_habit_instances_to_add = max(0, habit.frequency - num_habit_instances)
-                weekly_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False)] * num_habit_instances_to_add
+                weekly_items += [(habit.name, habit.duration * 60, ScheduleItemTypeEnum.HABIT, False, None)] * num_habit_instances_to_add
 
             # Get number of locked items
             num_locked_weekly_items = sum((1 if weekly_item[3] else 0) for weekly_item in weekly_items)
@@ -432,7 +444,8 @@ class WeeklyScheduleBuilder:
             for i, daily_time_blocks in enumerate(schedule_time_blocks):
                 for j, (time_block_start, time_block_end) in enumerate(daily_time_blocks):
                     daily_time_blocks[j] = (time_block_start + i * SECONDS_PER_DAY, time_block_end + i * SECONDS_PER_DAY)
-            time_blocks = sum(schedule_time_blocks, [])
+            weekly_schedule_time_blocks = sum(schedule_time_blocks, [])
+            time_blocks = tuple(weekly_schedule_time_blocks for _ in range(len(weekly_items)))
 
             # Calculate preferred spacing
             preferred_spacing = floor(SECONDS_PER_DAY * DAYS_PER_WEEK / num_weekly_habit_instances)
@@ -442,11 +455,11 @@ class WeeklyScheduleBuilder:
             for i, schedule_items in enumerate(scheduled_weekly_habits):
                 self.schedules[i].schedule_items += schedule_items
 
-    def schedule_work_sessions(self, schedule_date: date, timezone_format: timezone, preference: Optional[Preference] = None) -> None:
+    def schedule_work_sessions(self, schedule_date: date, timezone_format: timezone, tasks: list[Task], preference: Optional[Preference] = None) -> None:
         schedule_to_refresh = next(schedule for schedule in self.schedules if schedule.date == schedule_date)
         if (schedule_to_refresh.requires_work_refresh):
             schedule_builder = ScheduleBuilder(schedule_to_refresh)
-            schedule_builder.schedule_work_sessions(preference)
+            schedule_builder.schedule_work_sessions(tasks, preference)
 
 class ScheduleDirector:
 
@@ -502,7 +515,7 @@ class ScheduleDirector:
             time_planner = TimeDistributionPlanner(strategy)
             time_planner.distribute_work_hours(schedules, tasks, preference, START_OF_DAY, timezone_format)
 
-            builder.schedule_work_sessions(preference)
+            builder.schedule_work_sessions(tasks, preference)
 
 class WeeklyScheduleDirector:
 
@@ -563,4 +576,4 @@ class WeeklyScheduleDirector:
             time_planner = TimeDistributionPlanner(strategy)
             time_planner.distribute_work_hours(schedules_to_plan, tasks, preference, START_OF_DAY, timezone_format)
 
-            builder.schedule_work_sessions(schedule_date, timezone_format, preference)
+            builder.schedule_work_sessions(schedule_date, timezone_format, tasks, preference)

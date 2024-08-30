@@ -10,7 +10,8 @@ class ScheduleDTO(SQLAlchemyDTO[Schedule]):
             "schedule_items.0.name",
             "schedule_items.0.start_time",
             "schedule_items.0.end_time",
-            "schedule_items.0.schedule_item_type"
+            "schedule_items.0.schedule_item_type",
+            "schedule_items.0.ref_id"
         },
         rename_fields={"schedule_items.0.id": "schedule_item_id"}
     )
