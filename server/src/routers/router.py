@@ -1,7 +1,7 @@
 from litestar import Router
 from litestar.di import Provide
 from domain.users.controllers import UserController
-from domain.users.dependencies import provide_user
+from domain.users.dependencies import provide_user, provide_client
 from domain.users.preferences.controllers import PreferenceController
 from domain.users.tags.controllers import TagController
 from domain.users.tasks.controllers import TaskController
@@ -18,7 +18,7 @@ preference_router = Router(path="/preferences", route_handlers=[PreferenceContro
 user_router = Router(
     path="/users",
     route_handlers=[UserController, preference_router, tag_router, task_router, event_router, habit_router, schedule_router],
-    dependencies={"user": Provide(provide_user)}
+    dependencies={"user": Provide(provide_user), "client_id": Provide(provide_client)}
 )
 v1_router = Router(path="/v1", route_handlers=[user_router])
 router = Router(path="/api", route_handlers=[v1_router])

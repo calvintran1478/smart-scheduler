@@ -22,6 +22,7 @@ from lib.time import convert_to_utc
 from lib.sse import sse_generator
 
 from datetime import datetime
+from uuid import UUID
 from typing import Optional
 
 class TaskController(Controller):
@@ -33,11 +34,11 @@ class TaskController(Controller):
     }
 
     @get(path="/sse", sync_to_thread=False)
-    def sse_handler(self, channels: ChannelsPlugin, user: User) -> ServerSentEvent:
-        return ServerSentEvent(sse_generator(channels, user, "tasks"))
+    def sse_handler(self, channels: ChannelsPlugin, user: User, client_id: UUID) -> ServerSentEvent:
+        return ServerSentEvent(sse_generator(channels, user, client_id, "tasks"))
 
     @post(path="/", return_dto=TaskDTO)
-    async def create_task(self, data: CreateTaskInput, channels: ChannelsPlugin, user: User, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> Task:
+    async def create_task(self, data: CreateTaskInput, channels: ChannelsPlugin, user: User, client_id: UUID, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> Task:
         # Check tag exists if one was included
         tag = None
         if (data.tag != None):
@@ -63,6 +64,7 @@ class TaskController(Controller):
         # Send server event
         channels.publish({
             "event": "task added",
+            "origin_client": client_id,
             "task": {
                 "task_id": task.id,
                 "name": task.name,
@@ -90,7 +92,7 @@ class TaskController(Controller):
         return tasks
 
     @patch(path="/{task_id:str}", status_code=HTTP_204_NO_CONTENT)
-    async def update_task(self, data: UpdateTaskInput, channels: ChannelsPlugin, user: User, task: Task, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> None:      
+    async def update_task(self, data: UpdateTaskInput, channels: ChannelsPlugin, user: User, client_id: UUID, task: Task, tasks_repo: TaskRepository, tags_repo: TagRepository, schedules_repo: ScheduleRepository) -> None:      
         # Handle tag update
         if (data.tag != None):
             task.tag = await tags_repo.get_one_or_none(user_id=user.id, name=data.tag, auto_expunge=True)
@@ -110,6 +112,7 @@ class TaskController(Controller):
         # Send server event
         channels.publish({
             "event": "task updated",
+            "origin_client": client_id,
             "task": {
                 "task_id": task.id,
                 "name": task.name,
@@ -122,17 +125,17 @@ class TaskController(Controller):
         }, f"tasks_{user.id}")
 
     @delete(path="/{task_id:str}")
-    async def remove_task(self, channels: ChannelsPlugin, user: User, task: Task, tasks_repo: TaskRepository, schedules_repo: ScheduleRepository) -> None:
+    async def remove_task(self, channels: ChannelsPlugin, user: User, client_id: UUID, task: Task, tasks_repo: TaskRepository, schedules_repo: ScheduleRepository) -> None:
         await tasks_repo.delete(task.id, auto_expunge=True)
 
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
 
         # Send server event
-        channels.publish({"event": "task deleted", "task_id": task.id}, f"tasks_{user.id}")
+        channels.publish({"event": "task deleted", "origin_client": client_id, "task_id": task.id}, f"tasks_{user.id}")
 
     @delete(path="/{task_id:str}/tag")
-    async def remove_task_tag(self, channels: ChannelsPlugin, user: User, task: Task, tasks_repo: TaskRepository) -> None:
+    async def remove_task_tag(self, channels: ChannelsPlugin, user: User, client_id: UUID, task: Task, tasks_repo: TaskRepository) -> None:
         # Remove tag from task
         if (task.tag == None):
             raise NotFoundException(detail="Tag not found")
@@ -141,4 +144,4 @@ class TaskController(Controller):
         await tasks_repo.update(task, auto_expunge=True)
 
         # Send server event
-        channels.publish({"event": "task tag removed", "task_id": task.id}, f"tasks_{user.id}")
+        channels.publish({"event": "task tag removed", "origin_client": client_id, "task_id": task.id}, f"tasks_{user.id}")

@@ -24,6 +24,7 @@ from lib.event import get_updated_event_instance_from_event
 from lib.sse import sse_generator
 
 from typing import Optional
+from uuid import UUID
 from datetime import datetime, time
 
 class EventController(Controller):
@@ -36,11 +37,11 @@ class EventController(Controller):
     }
 
     @get(path="/sse", sync_to_thread=False)
-    def sse_handler(self, channels: ChannelsPlugin, user: User) -> ServerSentEvent:
-        return ServerSentEvent(sse_generator(channels, user, "events"))
+    def sse_handler(self, channels: ChannelsPlugin, user: User, client_id: UUID) -> ServerSentEvent:
+        return ServerSentEvent(sse_generator(channels, user, client_id, "events"))
 
     @post(path="/", return_dto=EventDTO)
-    async def create_event(self, data: CreateEventInput, channels: ChannelsPlugin, user: User, events_repo: EventRepository, schedules_repo: ScheduleRepository) -> Event:
+    async def create_event(self, data: CreateEventInput, channels: ChannelsPlugin, user: User, client_id: UUID, events_repo: EventRepository, schedules_repo: ScheduleRepository) -> Event:
         # Create event for the user
         event = Event(
             user_id=user.id,
@@ -61,6 +62,7 @@ class EventController(Controller):
         # Send server event
         channels.publish({
             "event": "event added",
+            "origin_client": client_id,
             "user_event": {
                 "event_id": event.id,
                 "summary": event.summary,
@@ -90,6 +92,7 @@ class EventController(Controller):
         data: DTOData[UpdateEventInput],
         channels: ChannelsPlugin,
         user: User,
+        client_id: UUID,
         event: Event,
         events_repo: EventRepository,
         exception_dates_repo: ExceptionDateRepository,
@@ -130,6 +133,7 @@ class EventController(Controller):
             # Send server event
             channels.publish({
                 "event": "event updated",
+                "origin_client": client_id,
                 "user_event": {
                     "event_id": event.id,
                     "summary": event.summary,
@@ -185,6 +189,7 @@ class EventController(Controller):
             # Send server event
             channels.publish({
                 "event": "event updated",
+                "origin_client": client_id,
                 "user_event": {
                     "event_id": event.id,
                     "summary": event.summary,
@@ -206,6 +211,7 @@ class EventController(Controller):
         self,
         channels: ChannelsPlugin,
         user: User,
+        client_id: UUID,
         event: Event,
         events_repo: EventRepository,
         exception_dates_repo: ExceptionDateRepository,
@@ -222,7 +228,7 @@ class EventController(Controller):
             await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
             # Send server event
-            channels.publish({"event": "event deleted", "event_id": event.id}, f"events_{user.id}")
+            channels.publish({"event": "event deleted", "origin_client": client_id, "event_id": event.id}, f"events_{user.id}")
 
         # Delete a particular instance of the event
         elif (start != None and timezone != None):
@@ -246,7 +252,7 @@ class EventController(Controller):
             await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.EVENT, ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
             # Send server event
-            channels.publish({"event": "event deleted", "event_id": event.id}, f"events_{user.id}")
+            channels.publish({"event": "event deleted", "origin_client": client_id, "event_id": event.id}, f"events_{user.id}")
 
         # Handle missing query parameters
         else:

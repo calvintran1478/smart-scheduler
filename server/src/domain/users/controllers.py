@@ -47,10 +47,13 @@ class UserController(Controller):
         if not checkpw(data.password.encode('utf-8'), user.password.encode('utf-8')):
             raise NotAuthorizedException(detail="Incorrect password")
 
+        # Create ID to identify the client
+        client_id = uuid4()
+
         # Start token family
         token_family_id = uuid4()
         await token_family_store.set(str(token_family_id), 1, expires_in=REFRESH_TOKEN_HOUR_LIFESPAN * 3600)
-        return TokenResponse(user.id, token_family_id, 1)
+        return TokenResponse(user.id, client_id, token_family_id, 1)
 
     @get(path="/token", exclude_from_auth=True)
     async def refresh_token(self, cookie: Annotated[str, Parameter(cookie="refresh-token")], users_repo: UserRepository) -> TokenResponse:
@@ -58,8 +61,8 @@ class UserController(Controller):
         refresh_claims = parse_claims(cookie)
 
         # Check that the refresh token corresponds to a user
-        user = await users_repo.get_one_or_none(id=refresh_claims["user_id"])
-        if (user == None):
+        user_exists = await users_repo.exists(id=refresh_claims["user_id"])
+        if (not user_exists):
             raise NotAuthorizedException
 
         # Check that the token family exists
@@ -74,7 +77,7 @@ class UserController(Controller):
 
         # Update sequence number to reflect new token in the token family
         await token_family_store.set(refresh_claims["token_family_id"], refresh_claims["sequence_number"] + 1, expires_in=REFRESH_TOKEN_HOUR_LIFESPAN * 3600)
-        return TokenResponse(user.id, refresh_claims["token_family_id"], refresh_claims["sequence_number"] + 1)
+        return TokenResponse(refresh_claims["user_id"], refresh_claims["client_id"], refresh_claims["token_family_id"], refresh_claims["sequence_number"] + 1)
 
     @patch(path="password", status_code=HTTP_204_NO_CONTENT)
     async def change_password(self, data: ChangePasswordInput, user: User, users_repo: UserRepository) -> None:

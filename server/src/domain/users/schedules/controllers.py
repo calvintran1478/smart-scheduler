@@ -39,8 +39,8 @@ class ScheduleController(Controller):
     }
 
     @get(path="/sse", sync_to_thread=False)
-    def sse_handler(self, channels: ChannelsPlugin, user: User) -> ServerSentEvent:
-        return ServerSentEvent(sse_generator(channels, user, "schedule"))
+    def sse_handler(self, channels: ChannelsPlugin, user: User, client_id: UUID) -> ServerSentEvent:
+        return ServerSentEvent(sse_generator(channels, user, client_id, "schedule"))
 
     @get(path="/{schedule_date:date}", return_dto=ScheduleDTO)
     async def get_schedule(
@@ -74,6 +74,7 @@ class ScheduleController(Controller):
         data: CreateFocusSessionInput,
         channels: ChannelsPlugin,
         user: User,
+        client_id: UUID,
         schedule_date: date,
         schedules_repo: ScheduleRepository,
         preferences_repo: PreferenceRepository,
@@ -122,6 +123,7 @@ class ScheduleController(Controller):
         # Send server event
         channels.publish({
             "event": "focus session added",
+            "origin_client": client_id,
             "focus_session": {
                 "schedule_item_id": focus_session.id,
                 "name": focus_session.name,
@@ -134,7 +136,7 @@ class ScheduleController(Controller):
         return focus_session
 
     @patch(path="/{schedule_date:date}/focus-sessions/{schedule_item_id:uuid}", status_code=HTTP_204_NO_CONTENT)
-    async def update_focus_session(self, data: UpdateFocusSessionInput, channels: ChannelsPlugin, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+    async def update_focus_session(self, data: UpdateFocusSessionInput, channels: ChannelsPlugin, user: User, client_id: UUID, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
         # Get schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
         if (schedule == None):
@@ -164,6 +166,7 @@ class ScheduleController(Controller):
         # Send server event
         channels.publish({
             "event": "focus session updated",
+            "origin_client": client_id,
             "focus_session": {
                 "schedule_item_id": focus_session.id,
                 "name": focus_session.name,
@@ -174,7 +177,7 @@ class ScheduleController(Controller):
         }, f"schedule_{user.id}")
 
     @delete(path="/{schedule_date:date}/focus-sessions/{schedule_item_id:uuid}")
-    async def remove_focus_session(self, channels: ChannelsPlugin, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+    async def remove_focus_session(self, channels: ChannelsPlugin, user: User, client_id: UUID, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
         # Fetch schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
         if (schedule == None):
@@ -184,7 +187,7 @@ class ScheduleController(Controller):
         for i, schedule_item in enumerate(schedule.schedule_items):
             if (schedule_item.id == schedule_item_id and schedule_item.schedule_item_type == ScheduleItemTypeEnum.FOCUS_SESSION):
                 # Send server event
-                channels.publish({"event": "focus session deleted", "focus_session_id": schedule.schedule_items[i].id}, f"schedule_{user.id}")
+                channels.publish({"event": "focus session deleted", "origin_client": client_id, "focus_session_id": schedule.schedule_items[i].id}, f"schedule_{user.id}")
 
                 del schedule.schedule_items[i]
                 return
@@ -192,7 +195,7 @@ class ScheduleController(Controller):
         raise NotFoundException(detail="Focus session not found")
 
     @patch(path="/{schedule_date:date}/habit-sessions/{schedule_item_id:uuid}", status_code=HTTP_204_NO_CONTENT)
-    async def update_habit_session(self, data: UpdateHabitSessionInput, channels: ChannelsPlugin, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
+    async def update_habit_session(self, data: UpdateHabitSessionInput, channels: ChannelsPlugin, user: User, client_id: UUID, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository) -> None:
         # Get schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date, auto_expunge=True)
         if (schedule == None):
@@ -226,6 +229,7 @@ class ScheduleController(Controller):
         # Send server event
         channels.publish({
             "event": "habit session updated",
+            "origin_client": client_id,
             "habit_session": {
                 "schedule_item_id": habit_session.id,
                 "name": habit_session.name,
@@ -236,7 +240,7 @@ class ScheduleController(Controller):
         }, f"schedule_{user.id}")
 
     @delete(path="/{schedule_date:date}/habit-sessions/{schedule_item_id:uuid}")
-    async def remove_habit_session(self, channels: ChannelsPlugin, user: User, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository, habits_repo: HabitRepository) -> None:
+    async def remove_habit_session(self, channels: ChannelsPlugin, user: User, client_id: UUID, schedule_date: date, schedule_item_id: UUID, schedules_repo: ScheduleRepository, habits_repo: HabitRepository) -> None:
         # Get schedule
         schedule = await schedules_repo.get_one_or_none(user_id=user.id, date=schedule_date)
         if (schedule == None):
@@ -267,7 +271,7 @@ class ScheduleController(Controller):
                     pass
 
         # Send server event
-        channels.publish({"event": "habit session deleted", "habit_session_id": habit_session.id}, f"schedule_{user.id}")
+        channels.publish({"event": "habit session deleted", "origin_client": client_id, "habit_session_id": habit_session.id}, f"schedule_{user.id}")
 
         # Remove habit session from schedule
         schedule.schedule_items.remove(habit_session)

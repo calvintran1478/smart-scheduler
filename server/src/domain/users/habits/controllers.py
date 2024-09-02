@@ -18,6 +18,8 @@ from domain.users.schedules.repositories import ScheduleRepository
 from domain.users.schedules.dependencies import provide_schedules_repo
 from lib.sse import sse_generator
 
+from uuid import UUID
+
 class HabitController(Controller):
     dependencies = {
         "habits_repo": Provide(provide_habits_repo),
@@ -27,11 +29,11 @@ class HabitController(Controller):
     }
 
     @get(path="/sse", sync_to_thread=False)
-    def sse_handler(self, channels: ChannelsPlugin, user: User) -> ServerSentEvent:
-        return ServerSentEvent(sse_generator(channels, user, "habits"))
+    def sse_handler(self, channels: ChannelsPlugin, user: User, client_id: UUID) -> ServerSentEvent:
+        return ServerSentEvent(sse_generator(channels, user, client_id, "habits"))
 
     @post(path="/", return_dto=HabitDTO)
-    async def create_habit(self, data: CreateHabitInput, channels: ChannelsPlugin, user: User, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> Habit:
+    async def create_habit(self, data: CreateHabitInput, channels: ChannelsPlugin, user: User, client_id: UUID, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> Habit:
         # Check if habit with name already exists
         habit_exists = await habits_repo.exists(user_id=user.id, name=data.name)
         if habit_exists:
@@ -58,6 +60,7 @@ class HabitController(Controller):
         # Send server event
         channels.publish({
             "event": "habit added",
+            "origin_client": client_id,
             "habit": {
                 "name": habit.name,
                 "frequency": habit.frequency,
@@ -77,7 +80,7 @@ class HabitController(Controller):
         return await habits_repo.list(user_id = user.id, auto_expunge=True)
 
     @patch(path="/{habit_name:str}", status_code=HTTP_204_NO_CONTENT)
-    async def update_habit(self, data: UpdateHabitInput, channels: ChannelsPlugin, user: User, habit: Habit, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> None:
+    async def update_habit(self, data: UpdateHabitInput, channels: ChannelsPlugin, user: User, client_id: UUID, habit: Habit, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> None:
         # Check if any habits have the same name as the updated value
         if (data.name != None and data.name != habit.name):
             habit_exists = await habits_repo.exists(user_id=user.id, name=data.name)
@@ -104,6 +107,7 @@ class HabitController(Controller):
         # Send server event
         channels.publish({
             "event": "habit updated",
+            "origin_client": client_id,
             "habit": {
                 "name": habit.name,
                 "frequency": habit.frequency,
@@ -117,14 +121,14 @@ class HabitController(Controller):
         }, f"habits_{user.id}")
 
     @delete(path="/{habit_name:str}")
-    async def remove_habit(self, channels: ChannelsPlugin, user: User, habit: Habit, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> None:
+    async def remove_habit(self, channels: ChannelsPlugin, user: User, client_id: UUID, habit: Habit, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> None:
         await habits_repo.delete(habit.id, auto_expunge=True)
 
         # Mark schedules for refresh
         await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
 
         # Send server event
-        channels.publish({"event": "habit deleted", "habit_name": habit.name}, f"habits_{user.id}")
+        channels.publish({"event": "habit deleted", "origin_client": client_id, "habit_name": habit.name}, f"habits_{user.id}")
 
     @post(path="/{habit_name:str}/completions", return_dto=HabitCompletionDTO)
     async def complete_habit(self, data: CompleteHabitInput, habit: Habit, habit_completions_repo: HabitCompletionRepository) -> HabitCompletion:
