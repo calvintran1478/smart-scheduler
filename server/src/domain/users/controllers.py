@@ -32,14 +32,14 @@ class UserController(Controller):
         # Hash password and register user into the database
         hashed_password = hashpw(data.password.encode('utf-8'), gensalt())
         user = User(email=data.email, password=hashed_password.decode('utf-8'), first_name=data.first_name, last_name=data.last_name)
-        await users_repo.add(user, auto_commit=True)
+        await users_repo.add(user, auto_expunge=True)
 
         return user
 
     @post(path="/login",  exclude_from_auth=True)
     async def login_user(self, data: LoginInput, users_repo: UserRepository) -> TokenResponse:
         # Look up user in database
-        user = await users_repo.get_one_or_none(email=data.email)
+        user = await users_repo.get_one_or_none(email=data.email, auto_expunge=True)
         if (user == None):
             raise NotFoundException(detail="User with email not found")
 
@@ -85,7 +85,7 @@ class UserController(Controller):
         hashed_password = hashpw(data.password.encode('utf-8'), gensalt())
         user.password = hashed_password.decode('utf-8')
 
-        await users_repo.update(user, auto_commit=True)
+        await users_repo.update(user, auto_expunge=True)
 
     @post(path="logout", status_code=HTTP_204_NO_CONTENT)
     async def logout_user(self, cookie: Annotated[str, Parameter(cookie="refresh-token")], auth_header: Annotated[str, Parameter(header="Authorization")]) -> None:

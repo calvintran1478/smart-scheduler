@@ -24,6 +24,7 @@ from lib.sse import sse_generator
 from datetime import datetime
 from uuid import UUID
 from typing import Optional
+from asyncio import gather
 
 class TaskController(Controller):
     dependencies = {
@@ -55,11 +56,12 @@ class TaskController(Controller):
             user_id = user.id
         )
 
-        await tasks_repo.add(task, auto_expunge=True)
-        task.deadline = task.deadline.astimezone(data.timezone)
+        await gather(
+            tasks_repo.add(task, auto_expunge=True),
+            schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
+        )
 
-        # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
+        task.deadline = task.deadline.astimezone(data.timezone)
 
         # Send server event
         channels.publish({
@@ -104,10 +106,10 @@ class TaskController(Controller):
             if attribute_value != None and attribute_name not in ["tag", "timezone"]:
                 setattr(task, attribute_name, attribute_value)
 
-        await tasks_repo.update(task, auto_expunge=True)
-
-        # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
+        await gather(
+            tasks_repo.update(task, auto_expunge=True),
+            schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
+        )
 
         # Send server event
         channels.publish({
@@ -126,10 +128,10 @@ class TaskController(Controller):
 
     @delete(path="/{task_id:str}")
     async def remove_task(self, channels: ChannelsPlugin, user: User, client_id: UUID, task: Task, tasks_repo: TaskRepository, schedules_repo: ScheduleRepository) -> None:
-        await tasks_repo.delete(task.id, auto_expunge=True)
-
-        # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
+        await gather(
+            tasks_repo.delete(task.id, auto_expunge=True),
+            schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.FOCUS_SESSION,))
+        )
 
         # Send server event
         channels.publish({"event": "task deleted", "origin_client": client_id, "task_id": task.id}, f"tasks_{user.id}")

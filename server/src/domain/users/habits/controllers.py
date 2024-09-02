@@ -19,6 +19,7 @@ from domain.users.schedules.dependencies import provide_schedules_repo
 from lib.sse import sse_generator
 
 from uuid import UUID
+from asyncio import gather
 
 class HabitController(Controller):
     dependencies = {
@@ -52,10 +53,10 @@ class HabitController(Controller):
             night_preferred=TimePrefererenceEnum.NIGHT in data.time_preference
         )
 
-        await habits_repo.add(habit, auto_expunge=True)
-
-        # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+        await gather(
+            habits_repo.add(habit, auto_expunge=True),
+            schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+        )
 
         # Send server event
         channels.publish({
@@ -99,10 +100,10 @@ class HabitController(Controller):
             if attribute_value != None and attribute_name != "time_preference":
                 setattr(habit, attribute_name, attribute_value)
 
-        await habits_repo.update(habit, auto_commit=True)
-
-        # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+        await gather(
+            habits_repo.update(habit, auto_expunge=True),
+            schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+        )
 
         # Send server event
         channels.publish({
@@ -122,10 +123,10 @@ class HabitController(Controller):
 
     @delete(path="/{habit_name:str}")
     async def remove_habit(self, channels: ChannelsPlugin, user: User, client_id: UUID, habit: Habit, habits_repo: HabitRepository, schedules_repo: ScheduleRepository) -> None:
-        await habits_repo.delete(habit.id, auto_expunge=True)
-
-        # Mark schedules for refresh
-        await schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+        await gather(
+            habits_repo.delete(habit.id, auto_expunge=True),
+            schedules_repo.mark_schedules_for_refresh(user.id, (ScheduleItemTypeEnum.HABIT, ScheduleItemTypeEnum.FOCUS_SESSION))
+        )
 
         # Send server event
         channels.publish({"event": "habit deleted", "origin_client": client_id, "habit_name": habit.name}, f"habits_{user.id}")

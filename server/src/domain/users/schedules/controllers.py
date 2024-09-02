@@ -262,7 +262,7 @@ class ScheduleController(Controller):
                 schedule_builder = ScheduleBuilder(candidate_schedule)
                 try:
                     # Send server event
-                    channels.publish({"event": "habit session deleted", "habit_session_id": habit_session.id}, f"schedule_{user.id}")
+                    channels.publish({"event": "habit session deleted", "origin_client": client_id, "habit_session_id": habit_session.id}, f"schedule_{user.id}")
 
                     schedule_builder.add_habit_session(habit)
                     schedule.schedule_items.remove(habit_session)
