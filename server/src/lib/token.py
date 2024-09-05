@@ -44,8 +44,8 @@ class TokenResponse(Response):
             key="refresh-token",
             value=refresh_token,
             max_age=REFRESH_TOKEN_HOUR_LIFESPAN * 3600,
-            domain="localhost",
             httponly=True,
+            secure=True,
             samesite="strict"
         )
 
