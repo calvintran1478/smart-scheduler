@@ -17,6 +17,9 @@ valkey_store = RedisStore.with_client(url=f"{"rediss" if AUTH_TLS_ENABLED else "
 blacklist_store = valkey_store.with_namespace("blacklist")
 token_family_store = valkey_store.with_namespace("token_family")
 
+session_maker = async_sessionmaker()
+engine = create_async_engine(f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode={SSL_MODE}")
+
 class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
     async def authenticate_request(self, connection: ASGIConnection) -> AuthenticationResult:
         # Check that the authorization header is included
@@ -25,10 +28,10 @@ class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
             raise NotAuthorizedException
 
         # Extract access token
-        auth_header_components = auth_header.split()
-        if (len(auth_header_components) != 2 or auth_header_components[0] != "Bearer"):
+        split_index = auth_header.find(" ")
+        if (split_index == -1 or split_index == (len(auth_header) - 1) or auth_header[:split_index] != "Bearer"):
             raise NotAuthorizedException
-        access_token = auth_header_components[1]
+        access_token = auth_header[split_index + 1:]
 
         # Check if the access token is blacklisted
         black_listed = await blacklist_store.exists(access_token)
@@ -39,8 +42,6 @@ class JWTAuthenticationMiddleware(AbstractAuthenticationMiddleware):
         access_claims = parse_claims(access_token)
 
         # Get user
-        session_maker = async_sessionmaker()
-        engine = create_async_engine(f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode={SSL_MODE}")
         async with session_maker(bind=engine) as session:
             try:
                 user_result = await session.execute(select(User).where(User.id == access_claims["user_id"]))

@@ -36,7 +36,7 @@ class UserController(Controller):
 
         return user
 
-    @post(path="/login",  exclude_from_auth=True)
+    @post(path="/login", exclude_from_auth=True)
     async def login_user(self, data: LoginInput, users_repo: UserRepository) -> TokenResponse:
         # Look up user in database
         user = await users_repo.get_one_or_none(email=data.email, auto_expunge=True)
